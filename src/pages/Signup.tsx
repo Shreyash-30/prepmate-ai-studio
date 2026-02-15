@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Sparkles, Eye, EyeOff } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { authService } from '@/services/api';
 
 export default function Signup() {
   const [name, setName] = useState('');
@@ -10,15 +12,46 @@ export default function Signup() {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (password.length < 6) {
+      toast({
+        title: 'Error',
+        description: 'Password must be at least 6 characters',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setLoading(true);
-    setTimeout(() => {
-      localStorage.setItem('auth_token', 'demo-token');
+    
+    try {
+      const response = await authService.signup({ name, email, password });
+      const { token, user } = response.data;
+      
+      // Store token
+      localStorage.setItem('auth_token', token);
+      localStorage.setItem('user', JSON.stringify(user));
+      
+      toast({
+        title: 'Success',
+        description: `Welcome to PrepMate AI, ${user.name}!`,
+      });
+      
       navigate('/dashboard');
+    } catch (error: any) {
+      const message = error.response?.data?.message || 'Signup failed';
+      toast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
       setLoading(false);
-    }, 800);
+    }
   };
 
   return (
@@ -35,30 +68,55 @@ export default function Signup() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="text-sm font-medium text-foreground">Full Name</label>
-            <input type="text" required value={name} onChange={(e) => setName(e.target.value)}
-              className="mt-1.5 w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="John Doe" />
+            <input 
+              type="text" 
+              required 
+              value={name} 
+              onChange={(e) => setName(e.target.value)}
+              disabled={loading}
+              className="mt-1.5 w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              placeholder="John Doe" 
+            />
           </div>
           <div>
             <label className="text-sm font-medium text-foreground">Email</label>
-            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
-              className="mt-1.5 w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="you@example.com" />
+            <input 
+              type="email" 
+              required 
+              value={email} 
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={loading}
+              className="mt-1.5 w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              placeholder="you@example.com" 
+            />
           </div>
           <div>
             <label className="text-sm font-medium text-foreground">Password</label>
             <div className="relative mt-1.5">
-              <input type={showPass ? 'text' : 'password'} required value={password} onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring pr-10"
-                placeholder="Min 8 characters" />
-              <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+              <input 
+                type={showPass ? 'text' : 'password'} 
+                required 
+                value={password} 
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={loading}
+                className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring pr-10 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="Min 6 characters" 
+              />
+              <button 
+                type="button" 
+                onClick={() => setShowPass(!showPass)} 
+                disabled={loading}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              >
                 {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
           </div>
 
-          <button type="submit" disabled={loading}
-            className="w-full rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50">
+          <button 
+            type="submit" 
+            disabled={loading}
+            className="w-full rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
             {loading ? 'Creating account…' : 'Create account'}
           </button>
         </form>

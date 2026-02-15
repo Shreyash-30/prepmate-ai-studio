@@ -21,8 +21,10 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    // Only handle 401 for protected routes, not auth endpoints
+    if (error.response?.status === 401 && !error.config?.url?.includes('/auth/')) {
       localStorage.removeItem('auth_token');
+      localStorage.removeItem('user');
       window.location.href = '/login';
     }
     return Promise.reject(error);
@@ -32,9 +34,14 @@ api.interceptors.response.use(
 export const authService = {
   login: (email: string, password: string) => api.post('/auth/login', { email, password }),
   signup: (data: { name: string; email: string; password: string }) => api.post('/auth/signup', data),
+  logout: () => api.post('/auth/logout', {}),
   forgotPassword: (email: string) => api.post('/auth/forgot-password', { email }),
+  resetPassword: (token: string, data: { password: string; confirmPassword: string }) => 
+    api.post(`/auth/reset-password/${token}`, data),
   getProfile: () => api.get('/auth/profile'),
   updateProfile: (data: Record<string, unknown>) => api.put('/auth/profile', data),
+  updatePassword: (data: { currentPassword: string; newPassword: string; confirmPassword: string }) => 
+    api.put('/auth/update-password', data),
 };
 
 export const dashboardService = {
@@ -73,9 +80,18 @@ export const plannerService = {
 };
 
 export const integrationsService = {
-  getConnections: () => api.get('/integrations'),
-  connect: (platform: string, data: Record<string, unknown>) => api.post(`/integrations/${platform}/connect`, data),
-  sync: (platform: string) => api.post(`/integrations/${platform}/sync`),
+  // Get all connected platforms and their status
+  getStatus: () => api.get('/integrations/status'),
+  
+  // Connect a new platform account
+  connect: (platform: string, username: string) => 
+    api.post('/integrations/connect', { platform, username }),
+  
+  // Manually trigger resync for a platform
+  resync: (platform: string) => api.post(`/integrations/resync/${platform}`),
+  
+  // Disconnect from a platform
+  disconnect: (platform: string) => api.delete(`/integrations/${platform}`),
 };
 
 export default api;

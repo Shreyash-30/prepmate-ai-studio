@@ -3,12 +3,45 @@ import { useNavigate } from 'react-router-dom';
 import { Bell, Moon, Sun, User, Settings, LogOut, ChevronDown } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useToast } from '@/hooks/use-toast';
+import { authService } from '@/services/api';
 
 export default function AppHeader() {
   const { theme, toggleTheme } = useTheme();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const { toast } = useToast();
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      // Call logout endpoint
+      await authService.logout();
+
+      // Clear localStorage
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('user');
+
+      // Show success message
+      toast({
+        title: 'Logged out',
+        description: 'You have been logged out successfully',
+      });
+
+      // Redirect to login
+      navigate('/login');
+    } catch (error: any) {
+      console.error('Logout error:', error);
+      // Even if API fails, clear local data
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('user');
+      navigate('/login');
+    } finally {
+      setLoggingOut(false);
+    }
+  };
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -76,10 +109,11 @@ export default function AppHeader() {
                 </button>
                 <div className="my-1 h-px bg-border" />
                 <button
-                  onClick={() => { localStorage.removeItem('auth_token'); window.location.href = '/login'; }}
-                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors"
+                  onClick={() => { setDropdownOpen(false); handleLogout(); }}
+                  disabled={loggingOut}
+                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <LogOut className="h-4 w-4" /> Log out
+                  <LogOut className="h-4 w-4" /> {loggingOut ? 'Logging out...' : 'Log out'}
                 </button>
               </motion.div>
             )}

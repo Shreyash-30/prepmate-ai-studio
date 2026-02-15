@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Sparkles, Eye, EyeOff } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { authService } from '@/services/api';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -9,16 +11,36 @@ export default function Login() {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // API placeholder
-    setTimeout(() => {
-      localStorage.setItem('auth_token', 'demo-token');
+    
+    try {
+      const response = await authService.login(email, password);
+      const { token, user } = response.data;
+      
+      // Store token
+      localStorage.setItem('auth_token', token);
+      localStorage.setItem('user', JSON.stringify(user));
+      
+      toast({
+        title: 'Success',
+        description: `Welcome back, ${user.name}!`,
+      });
+      
       navigate('/dashboard');
+    } catch (error: any) {
+      const message = error.response?.data?.message || 'Login failed';
+      toast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
       setLoading(false);
-    }, 800);
+    }
   };
 
   return (
@@ -44,7 +66,8 @@ export default function Login() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1.5 w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              disabled={loading}
+              className="mt-1.5 w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               placeholder="you@example.com"
             />
           </div>
@@ -56,10 +79,16 @@ export default function Login() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring pr-10"
+                disabled={loading}
+                className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring pr-10 disabled:cursor-not-allowed disabled:opacity-50"
                 placeholder="••••••••"
               />
-              <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+              <button 
+                type="button" 
+                onClick={() => setShowPass(!showPass)} 
+                disabled={loading}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              >
                 {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
@@ -72,7 +101,7 @@ export default function Login() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+            className="w-full rounded-lg bg-primary py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Signing in…' : 'Sign in'}
           </button>

@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from '@/components/ui/sonner';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import AppLayout from '@/components/layout/AppLayout';
+import { ProtectedRoute, PublicRoute } from '@/components/ProtectedRoute';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Practice = lazy(() => import('./pages/Practice'));
@@ -31,21 +32,21 @@ const App = () => (
     <BrowserRouter>
       <Suspense fallback={<PageLoader />}>
         <Routes>
-          {/* Auth routes */}
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
+          {/* Public auth routes */}
+          <Route path="/login" element={<PublicRoute element={<Login />} />} />
+          <Route path="/signup" element={<PublicRoute element={<Signup />} />} />
+          <Route path="/forgot-password" element={<PublicRoute element={<ForgotPassword />} />} />
 
-          {/* App routes */}
+          {/* Protected app routes */}
           <Route element={<AppLayout />}>
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/practice" element={<Practice />} />
-            <Route path="/revision" element={<Revision />} />
-            <Route path="/mock-interview" element={<MockInterview />} />
-            <Route path="/planner" element={<Planner />} />
-            <Route path="/integrations" element={<Integrations />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/settings" element={<Settings />} />
+            <Route path="/dashboard" element={<ProtectedRoute element={<Dashboard />} />} />
+            <Route path="/practice" element={<ProtectedRoute element={<Practice />} />} />
+            <Route path="/revision" element={<ProtectedRoute element={<Revision />} />} />
+            <Route path="/mock-interview" element={<ProtectedRoute element={<MockInterview />} />} />
+            <Route path="/planner" element={<ProtectedRoute element={<Planner />} />} />
+            <Route path="/integrations" element={<ProtectedRoute element={<Integrations />} />} />
+            <Route path="/profile" element={<ProtectedRoute element={<Profile />} />} />
+            <Route path="/settings" element={<ProtectedRoute element={<Settings />} />} />
           </Route>
 
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
