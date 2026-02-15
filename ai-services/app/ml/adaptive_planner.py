@@ -148,14 +148,23 @@ class AdaptivePlanner:
                 request.user_id
             )
             
-            # Get weakness analysis
-            weakness_analysis = await self.weakness_detector.analyze_weaknesses(
-                {"user_id": request.user_id, "include_contest_data": True}
+            # Get weakness analysis  
+            from app.ml.weakness_detection import WeaknessAnalysisRequest
+            weakness_req = WeaknessAnalysisRequest(
+                user_id=request.user_id,
+                include_contest_data=True
             )
+            weakness_analysis = await self.weakness_detector.analyze_weaknesses(weakness_req)
+            
+            # Extract focus_areas from the response
+            if hasattr(weakness_analysis, 'dict'):
+                weakness_analysis = weakness_analysis.dict()
+            if isinstance(weakness_analysis, dict) and "focus_areas" not in weakness_analysis:
+                weakness_analysis["focus_areas"] = []
             
             # Get retention data
             retention_map = {}
-            if self.db and self.db.revision_schedule:
+            if self.db is not None and self.db.revision_schedule is not None:
                 retention_docs = await self.db.revision_schedule.find(
                     {"userId": request.user_id}
                 ).to_list(None)
@@ -174,7 +183,8 @@ class AdaptivePlanner:
                 retention = retention_map.get(topic_id, 0.5)
                 
                 # Determine urgency
-                if topic_id in weakness_analysis.focus_areas:
+                focus_areas_list = weakness_analysis.get("focus_areas", []) if isinstance(weakness_analysis, dict) else weakness_analysis.focus_areas
+                if topic_id in focus_areas_list:
                     urgency = 0.9
                 elif mastery < 0.5:
                     urgency = 0.7

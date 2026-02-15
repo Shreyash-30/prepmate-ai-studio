@@ -154,7 +154,7 @@ class MasteryEngine:
     
     def __init__(self, db: AsyncIOMotorDatabase):
         self.db = db
-        self.collection = db.topic_mastery if db is not None else None
+        self.collection = db['topic_mastery']  # Use explicit indexing instead of attribute access
         self.bkt = BayesianKnowledgeTracing()
         logger.info("Mastery Engine initialized")
     
@@ -191,13 +191,13 @@ class MasteryEngine:
                     "topicId": request.topic_id,
                 })
             
-            prior = current_doc.get("mastery_probability", 0.1) if current_doc else 0.1
+            prior = current_doc.get("mastery_probability", 0.1) if current_doc is not None else 0.1
             
             # Process attempts
             posterior, confidence = self.bkt.batch_update(prior, request.attempts)
             
             # Calculate improvement trend
-            if current_doc:
+            if current_doc is not None:
                 previous = current_doc.get("mastery_probability", prior)
                 if posterior > previous + 0.05:
                     trend = "improving"
@@ -246,7 +246,11 @@ class MasteryEngine:
                     "updatedAt": datetime.utcnow(),
                 }
                 
-                await self.collection.update_one(
+                logger.info(f"[DEBUG] Storing mastery data: user_id={request.user_id}, topic_id={request.topic_id}")
+                logger.info(f"[DEBUG] Collection name: {self.collection.name}")
+                logger.info(f"[DEBUG] Update data: {update_data}")
+                
+                result = await self.collection.update_one(
                     {
                         "userId": request.user_id,
                         "topicId": request.topic_id,
@@ -254,12 +258,16 @@ class MasteryEngine:
                     {"$set": update_data},
                     upsert=True,
                 )
+                
+                logger.info(f"[DEBUG] MongoDB update result - matched: {result.matched_count}, upserted: {result.upserted_id}, modified: {result.modified_count}")
+            else:
+                logger.warning("[DEBUG] Collection is None - data not stored")
             
             return MasteryMetrics(
                 mastery_probability=posterior,
                 confidence_score=confidence,
                 improvement_trend=trend,
-                attempts_count=update_data.get("attempts_count", 0) if self.collection else total_attempts,
+                attempts_count=update_data.get("attempts_count", 0) if self.collection is not None else total_attempts,
                 last_attempt_timestamp=datetime.utcnow().isoformat(),
                 recommended_difficulty=rec_difficulty,
                 explainability=explainability,

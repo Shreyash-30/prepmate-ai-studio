@@ -1,36 +1,65 @@
 """
 FastAPI Application Setup
 Initializes all LLM services and configures the application
+
+Environment Setup Flow:
+1. Check Python version
+2. Load .env file
+3. Import FastAPI and dependencies
+4. Initialize services (LLM, ML, MongoDB)
+5. Start server on configured port
 """
-import logging
+import sys
 import os
+from pathlib import Path
 from contextlib import asynccontextmanager
-from dotenv import load_dotenv
+
+# Ensure Python 3.8+
+if sys.version_info < (3, 8):
+    print("❌ ERROR: Python 3.8+ required")
+    sys.exit(1)
 
 # Load environment variables from .env file
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    env_path = Path(__file__).parent / '.env'
+    load_dotenv(env_path, override=True)
+except ImportError:
+    print("⚠️  WARNING: python-dotenv not found, using system environment")
 
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
-from app.llm import (
-    initialize_gemini,
-    router,
-    set_mentor_service,
-    set_practice_review_service,
-    set_interview_service,
-    set_learning_service,
-    MentorService,
-    PracticeReviewService,
-    InterviewService,
-    LearningService,
-)
-from app.ml import initialize_ml_services
-from app.ml.routers import router as ml_router
+try:
+    from app.llm import (
+        initialize_gemini,
+        router,
+        set_mentor_service,
+        set_practice_review_service,
+        set_interview_service,
+        set_learning_service,
+        MentorService,
+        PracticeReviewService,
+        InterviewService,
+        LearningService,
+    )
+    from app.ml import initialize_ml_services
+    from app.ml.routers import router as ml_router
+except ImportError as e:
+    print(f"❌ ERROR: Failed to import app modules: {e}")
+    print("\nTroubleshooting:")
+    print("1. Run: python setup.py")
+    print("2. Check requirements.txt is complete")
+    print("3. Ensure you're in the ai-services directory")
+    sys.exit(1)
 
 # Setup logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=os.getenv('LOG_LEVEL', 'INFO'),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 # Global database instance
@@ -53,10 +82,15 @@ async def lifespan(app: FastAPI):
         # Initialize MongoDB connection
         mongo_uri = os.getenv(
             "MONGO_URI",
-            "mongodb://localhost:27017/prepmate_ai"
+            "mongodb://localhost:27017/prepmate-ai-studio"
         )
         client = AsyncIOMotorClient(mongo_uri)
-        db = client.prepmate_ai
+        
+        # Extract database name from URI or use default
+        from urllib.parse import urlparse
+        parsed_uri = urlparse(mongo_uri)
+        db_name = parsed_uri.path.lstrip('/') or 'prepmate-ai-studio'
+        db = client[db_name]
 
         # Check MongoDB connection
         await db.command("ping")
@@ -145,9 +179,10 @@ app = create_app()
 if __name__ == "__main__":
     import uvicorn
 
+    port = int(os.getenv("AI_SERVICE_PORT", os.getenv("PORT", "8001")))
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=int(os.getenv("PORT", "8000")),
+        port=port,
         reload=os.getenv("ENV", "development") == "development",
     )

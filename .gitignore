@@ -12,13 +12,17 @@ dist
 dist-ssr
 *.local
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+# Environment variables and sensitive data
+.env
+.env.local
+.env.*.local
+.env.production.local
+.env.development.local
+ai-services/.env
+ai-services/__pycache__/
+ai-services/*.pkl
+ai-services/models/*.pkl
+.pytest_cache
+*.pyc
+__pycache__/
+

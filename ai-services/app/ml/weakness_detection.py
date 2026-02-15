@@ -158,7 +158,7 @@ class WeaknessDetection:
             )
             
             # Get retention snapshot
-            if self.db and self.db.revision_schedule:
+            if self.db is not None and self.db.revision_schedule is not None:
                 retention_docs = await self.db.revision_schedule.find(
                     {"userId": request.user_id}
                 ).to_list(None)

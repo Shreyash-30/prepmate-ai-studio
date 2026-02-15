@@ -127,7 +127,7 @@ class RetentionModel:
     
     def __init__(self, db: AsyncIOMotorDatabase):
         self.db = db
-        self.collection = db.revision_schedule if db is not None else None
+        self.collection = db['revision_schedule']  # Use explicit indexing
         self.forgetting_curve = EbbinghausForgettingCurve()
         logger.info("Retention Model initialized")
     
@@ -233,7 +233,10 @@ class RetentionModel:
                     "updatedAt": datetime.utcnow(),
                 }
                 
-                await self.collection.update_one(
+                logger.info(f"[DEBUG] Storing retention data: user_id={request.user_id}, topic_id={request.topic_id}")
+                logger.info(f"[DEBUG] Collection name: {self.collection.name}")
+                
+                result = await self.collection.update_one(
                     {
                         "userId": request.user_id,
                         "topicId": request.topic_id,
@@ -241,6 +244,10 @@ class RetentionModel:
                     {"$set": update_data},
                     upsert=True,
                 )
+                
+                logger.info(f"[DEBUG] MongoDB update result - matched: {result.matched_count}, upserted: {result.upserted_id}, modified: {result.modified_count}")
+            else:
+                logger.warning("[DEBUG] Collection is None - data not stored")
             
             return RetentionMetrics(
                 retention_probability=retention_now,

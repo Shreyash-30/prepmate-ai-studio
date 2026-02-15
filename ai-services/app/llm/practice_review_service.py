@@ -48,7 +48,7 @@ class PracticeReviewService:
 
     def __init__(self, db: Optional[AsyncIOMotorDatabase] = None):
         self.db = db
-        self.collection = db.code_reviews if db is not None else None
+        self.collection = db['code_reviews']  # Use explicit indexing
         self.gemini = get_gemini_client()
 
     async def initialize_indexes(self) -> None:

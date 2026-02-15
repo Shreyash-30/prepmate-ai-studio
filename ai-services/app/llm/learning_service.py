@@ -61,7 +61,7 @@ class LearningService:
 
     def __init__(self, db: Optional[AsyncIOMotorDatabase] = None):
         self.db = db
-        self.collection = db.learning_content if db is not None else None
+        self.collection = db['learning_content']  # Use explicit indexing
         self.gemini = get_gemini_client()
 
     async def initialize_indexes(self) -> None:

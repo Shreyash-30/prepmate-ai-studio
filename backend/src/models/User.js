@@ -75,6 +75,59 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+
+    // ============================================
+    // ML INTELLIGENCE CONTEXT (NEW)
+    // ============================================
+    
+    // Learning proficiency level for ML model calibration
+    learningLevel: {
+      type: String,
+      enum: ['beginner', 'intermediate', 'advanced'],
+      default: 'intermediate',
+    },
+
+    // Target companies for interview readiness prediction
+    targetCompaniesArray: [
+      {
+        type: String,
+      },
+    ],
+
+    // When user started interview preparation (for readiness timeline)
+    preparationStartDate: {
+      type: Date,
+      default: null,
+    },
+
+    // Current phase of preparation
+    preparationPhase: {
+      type: String,
+      enum: ['exploration', 'practice', 'refinement', 'interview-ready'],
+      default: 'exploration',
+    },
+
+    // Daily study target in minutes (for adaptive planning)
+    dailyStudyMinutes: {
+      type: Number,
+      default: 120,
+    },
+
+    // Weight preference: 0=balanced, 1=mastery-focused, 2=breadth-focused
+    learningPreference: {
+      type: Number,
+      default: 0,
+    },
+
+    // Opt-out settings for ML services
+    mlSettings: {
+      enableMasteryTracking: { type: Boolean, default: true },
+      enableRetentionScheduling: { type: Boolean, default: true },
+      enableWeaknessAnalysis: { type: Boolean, default: true },
+      enableAdaptivePlanning: { type: Boolean, default: true },
+      enableLLMServices: { type: Boolean, default: true },
+    },
+
     passwordResetToken: {
       type: String,
       default: null,

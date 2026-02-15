@@ -6,7 +6,7 @@ import logging
 import pickle
 import numpy as np
 from typing import Dict, Optional, Tuple, List
-from datetime import datetime
+from datetime import datetime, timedelta
 from pydantic import BaseModel
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
@@ -177,20 +177,21 @@ class ReadinessModel:
         """
         try:
             # Get mastery profile
-            mastery_profile = await self.db.collection.find_one(
+            mastery_profile = await self.db.topic_mastery.find_one(
                 {"userId": request.user_id}
-            ) if self.db else None
+            ) if self.db is not None else None
             
             if not mastery_profile:
                 mastery_profile = {"topics": []}
             
             # Get retention snapshot
-            retention_data = {"topics": []}
-            if self.db and self.db.revision_schedule:
+            if self.db is not None and self.db.revision_schedule is not None:
                 retention_docs = await self.db.revision_schedule.find(
                     {"userId": request.user_id}
                 ).to_list(None)
                 retention_data = {"topics": retention_docs or []}
+            else:
+                retention_data = {"topics": []}
             
             # Extract features
             features = await self._extract_features(

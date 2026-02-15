@@ -52,7 +52,7 @@ class InterviewService:
 
     def __init__(self, db: Optional[AsyncIOMotorDatabase] = None):
         self.db = db
-        self.collection = db.interview_sessions if db is not None else None
+        self.collection = db['interview_sessions']  # Use explicit indexing
         self.gemini = get_gemini_client()
 
     async def initialize_indexes(self) -> None:

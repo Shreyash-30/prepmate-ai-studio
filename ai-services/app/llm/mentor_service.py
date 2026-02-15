@@ -46,7 +46,7 @@ class MentorService:
 
     def __init__(self, db: AsyncIOMotorDatabase):
         self.db = db
-        self.collection = db.mentor_conversations
+        self.collection = db['mentor_conversations']  # Use explicit indexing
         self.gemini = get_gemini_client()
 
     async def initialize_indexes(self) -> None:
