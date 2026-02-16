@@ -1,5 +1,5 @@
 import express from 'express';
-import { connect, getStatus, resync, disconnect } from '../controllers/integrationController.js';
+import { connect, getStatus, resync, disconnect, checkConnection } from '../controllers/integrationController.js';
 import authMiddleware from '../middleware/auth.js';
 
 const router = express.Router();
@@ -12,6 +12,12 @@ router.use(authMiddleware);
  * Connect a new platform account
  */
 router.post('/connect', connect);
+
+/**
+ * GET /api/integrations/check-connection
+ * Check if user has connected integrations (called on login)
+ */
+router.get('/check-connection', checkConnection);
 
 /**
  * GET /api/integrations/status

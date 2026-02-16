@@ -32,6 +32,7 @@ from .learning_service import (
     LearningContent,
     get_learning_service,
 )
+from .question_generation_service import QuestionGenerationService
 
 logger = logging.getLogger(__name__)
 
@@ -474,6 +475,95 @@ async def explain_concept(
         )
 
 
+# Question Generation
+@router.post("/practice/generate-questions")
+async def generate_questions(request: dict):
+    """
+    Generate personalized coding practice questions using Gemini
+    
+    Request body:
+    {
+        "learnerProfile": {
+            "learningLevel": "beginner|intermediate|advanced",
+            "targetCompanies": "comma,separated,companies",
+            "preparationGoal": "interview|practice|learning",
+            "topicId": "Topic Name",
+            "masteryScore": 0.0-1.0,
+            "progressionReadinessScore": 0.0-1.0,
+            "retentionProbability": 0.0-1.0,
+            "weakSubtopics": "weak,areas",
+            "recentMistakePatterns": "pattern1,pattern2",
+            "recommendedDifficulty": "Easy|Medium|Hard",
+            "desiredQuestionCount": 5
+        },
+        "limit": 5
+    }
+    
+    Returns:
+    {
+        "success": bool,
+        "questions": [
+            {
+                "problemTitle": str,
+                "topic": str,
+                "difficulty": str,
+                "primaryConceptTested": str,
+                "whyRecommended": str,
+                "hints": [str],
+                "approachGuide": str,
+                "generatedFor": str,
+                "learnerLevel": str
+            }
+        ],
+        "error": Optional[str],
+        "generatedAt": Optional[str]
+    }
+    """
+    try:
+        learner_profile = request.get('learnerProfile', {})
+        limit = request.get('limit', 5)
+        
+        if not learner_profile:
+            raise ValueError("learnerProfile is required in request body")
+        
+        logger.info(f"Generating questions for topic: {learner_profile.get('topicId', 'Unknown')}")
+        
+        # Generate questions using Gemini
+        result = await QuestionGenerationService.generate_questions(
+            learner_profile=learner_profile,
+            limit=limit
+        )
+        
+        # If Gemini unavailable, provide fallback questions
+        if not result['success'] and result.get('error'):
+            logger.info("Using fallback questions")
+            fallback_questions = QuestionGenerationService.get_fallback_questions(
+                learner_profile=learner_profile,
+                limit=limit
+            )
+            return {
+                "success": True,
+                "questions": fallback_questions,
+                "source": "fallback",
+                "message": "Using fallback questions - Gemini service unavailable"
+            }
+        
+        return result
+        
+    except ValueError as e:
+        logger.error(f"Validation error in question generation: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid request: {str(e)}"
+        )
+    except Exception as e:
+        logger.error(f"Error generating questions: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error generating questions: {str(e)}"
+        )
+
+
 # Health check
 @router.get("/health")
 async def health_check():
@@ -496,3 +586,43 @@ async def health_check():
             "error": str(e),
         }
 
+
+# ========== Multi-Provider Monitoring Endpoints ==========
+
+@router.get("/providers/health")
+async def get_provider_health():
+    """Get health status of all LLM providers (Gemini, Groq, Together AI)"""
+    try:
+        client = get_gemini_client()
+        return {
+            "status": "healthy",
+            "providers": client.get_provider_health(),
+        }
+    except Exception as e:
+        logger.error(f"Failed to get provider health: {str(e)}")
+        return {
+            "status": "error",
+            "error": str(e),
+        }
+
+
+@router.post("/providers/reset/{provider}")
+async def reset_provider_health(provider: str):
+    """Reset health metrics for a specific provider (for recovery)
+    
+    Parameters:
+    - provider: 'gemini', 'groq', 'together', or 'all'
+    """
+    try:
+        client = get_gemini_client()
+        client.reset_provider_health(provider if provider != 'all' else None)
+        return {
+            "status": "success",
+            "message": f"Reset health metrics for {provider}",
+        }
+    except Exception as e:
+        logger.error(f"Failed to reset provider health: {str(e)}")
+        return {
+            "status": "error",
+            "error": str(e),
+        }

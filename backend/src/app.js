@@ -6,6 +6,7 @@ import { connectDB, disconnectDB } from './config/database.js';
 import authRoutes from './routes/authRoutes.js';
 import integrationRoutes from './routes/integrationRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
+import practiceRoutes from './routes/practiceRoutes.js';
 
 dotenv.config();
 
@@ -30,6 +31,7 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/integrations', integrationRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/practice', practiceRoutes);
 
 // 404 handler
 app.use((req, res) => {

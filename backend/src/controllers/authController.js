@@ -1,6 +1,8 @@
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import User from '../models/User.js';
+import IntegrationAccount from '../models/IntegrationAccount.js';
+import ExternalPlatformSubmission from '../models/ExternalPlatformSubmission.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_here';
 const JWT_EXPIRY = process.env.JWT_EXPIRY || '7d';
@@ -62,6 +64,14 @@ export const signup = async (req, res) => {
         role: user.role,
         targetCompanies: user.targetCompanies || '',
         preparationTimeline: user.preparationTimeline || '',
+        leetcodeIntegration: {
+          isConnected: false,
+          platform: 'leetcode',
+          username: null,
+          submissionCount: 0,
+          connectionStatus: null,
+          lastSyncAt: null
+        }
       },
     });
   } catch (error) {
@@ -111,6 +121,39 @@ export const login = async (req, res) => {
     // Generate token
     const token = generateToken(user._id);
 
+    // Check LeetCode integration status
+    const leetcodeIntegration = await IntegrationAccount.findOne({
+      userId: user._id,
+      platform: 'leetcode'
+    });
+
+    let integrationStatus = {
+      isConnected: false,
+      platform: 'leetcode',
+      username: null,
+      submissionCount: 0,
+      connectionStatus: null,
+      lastSyncAt: null
+    };
+
+    if (leetcodeIntegration) {
+      const submissionCount = await ExternalPlatformSubmission.countDocuments({
+        userId: user._id,
+        platform: 'leetcode'
+      });
+
+      integrationStatus = {
+        isConnected: leetcodeIntegration.connectionStatus === 'connected',
+        platform: 'leetcode',
+        username: leetcodeIntegration.username,
+        submissionCount: submissionCount,
+        connectionStatus: leetcodeIntegration.connectionStatus,
+        bootstrapStatus: leetcodeIntegration.bootstrapStatus,
+        lastSyncAt: leetcodeIntegration.lastSyncAt,
+        connectedAt: leetcodeIntegration.connectedAt
+      };
+    }
+
     // Return response
     return res.status(200).json({
       success: true,
@@ -124,6 +167,7 @@ export const login = async (req, res) => {
         role: user.role,
         targetCompanies: user.targetCompanies || '',
         preparationTimeline: user.preparationTimeline || '',
+        leetcodeIntegration: integrationStatus
       },
     });
   } catch (error) {

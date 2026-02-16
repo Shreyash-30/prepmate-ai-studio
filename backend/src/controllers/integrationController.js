@@ -242,4 +242,61 @@ async function disconnect(req, res) {
   }
 }
 
-export { connect, getStatus, resync, disconnect };
+/**
+ * GET /api/integrations/check-connection
+ * Check if user has connected integrations and get status details
+ */
+async function checkConnection(req, res) {
+  try {
+    const userId = req.user.id;
+
+    // Check LeetCode connection
+    const leetcodeAccount = await IntegrationAccount.findOne({
+      userId,
+      platform: 'leetcode'
+    });
+
+    let connectionData = {
+      leetcode: {
+        isConnected: false,
+        username: null,
+        submissionCount: 0,
+        connectionStatus: null,
+        bootstrapStatus: null,
+        lastSyncAt: null,
+        connectedAt: null
+      }
+    };
+
+    if (leetcodeAccount) {
+      const submissionCount = await ExternalPlatformSubmission.countDocuments({
+        userId,
+        platform: 'leetcode'
+      });
+
+      connectionData.leetcode = {
+        isConnected: leetcodeAccount.connectionStatus === 'connected',
+        username: leetcodeAccount.username,
+        submissionCount: submissionCount,
+        connectionStatus: leetcodeAccount.connectionStatus,
+        bootstrapStatus: leetcodeAccount.bootstrapStatus,
+        lastSyncAt: leetcodeAccount.lastSyncAt,
+        connectedAt: leetcodeAccount.connectedAt
+      };
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: connectionData
+    });
+  } catch (error) {
+    console.error('Error in checkConnection:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to check connection',
+      error: error.message,
+    });
+  }
+}
+
+export { connect, getStatus, resync, disconnect, checkConnection };

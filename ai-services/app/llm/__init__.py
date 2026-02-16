@@ -19,6 +19,7 @@ from .learning_service import (
     get_learning_service,
     set_learning_service,
 )
+from .question_generation_service import QuestionGenerationService
 from .routers import router
 
 __all__ = [
@@ -37,5 +38,6 @@ __all__ = [
     "LearningService",
     "get_learning_service",
     "set_learning_service",
+    "QuestionGenerationService",
     "router",
 ]

@@ -1,6 +1,12 @@
 """
-Gemini AI Client
+Gemini AI Client (Enhanced with Multi-Provider Fallback)
 Handles initialization and communication with Google Gemini API
+Falls back to Groq and Together AI if Gemini quota/limits exceeded
+
+Architecture:
+- Primary: Google Gemini (highest quality)
+- Fallback 1: Groq (fast, high quota) - If Gemini fails
+- Fallback 2: Together AI (reliable alternative)
 """
 import os
 import time
@@ -9,14 +15,20 @@ import logging
 import google.generativeai as genai
 from google.api_core.exceptions import ResourceExhausted, DeadlineExceeded
 
+# Import the multi-provider router
+from .llm_provider_router import get_llm_router
+
 logger = logging.getLogger(__name__)
 
 
 class GeminiClient:
-    """Client for interacting with Google Gemini API"""
+    """Client for interacting with Google Gemini API with fallback providers
+    
+    Maintains backward compatibility while adding automatic failover to Groq and Together AI
+    """
 
     def __init__(self, api_key: Optional[str] = None):
-        """Initialize Gemini client with API key from environment or parameter
+        """Initialize Gemini client with fallback to Groq/Together AI
         
         Args:
             api_key: Optional API key. If not provided, attempts to load from environment.
@@ -29,6 +41,9 @@ class GeminiClient:
         self.model = None
         self.available = False
         
+        # Initialize multi-provider router
+        self.router = get_llm_router()
+        
         if api_key:
             try:
                 genai.configure(api_key=api_key)
@@ -39,7 +54,7 @@ class GeminiClient:
                 logger.warning(f"⚠️ Failed to configure Gemini: {str(e)}")
                 self.available = False
         else:
-            logger.warning("⚠️ GEMINI_API_KEY not configured. LLM features will be unavailable.")
+            logger.warning("⚠️ GEMINI_API_KEY not configured. Will fallback to Groq/Together AI.")
             self.available = False
         
         self.safety_settings = [
@@ -70,7 +85,7 @@ class GeminiClient:
         timeout: int = 30,
     ) -> str:
         """
-        Generate response from Gemini API with retry and timeout handling
+        Generate response from Gemini or fallback providers with automatic failover
 
         Args:
             prompt: The input prompt for the model
@@ -80,83 +95,31 @@ class GeminiClient:
             timeout: Timeout in seconds
 
         Returns:
-            Generated response text, or fallback message if API unavailable
+            Generated response text, or fallback message if all APIs unavailable
         """
-        # Check if Gemini is available
-        if not self.available or not self.model:
-            logger.warning("⚠️ Gemini API not available. Returning degraded response.")
-            return self._get_fallback_response(
-                "LLM service is currently unavailable. This feature requires Gemini API configuration."
-            )
-        
-        for attempt in range(retry_count):
-            try:
-                logger.debug(f"Gemini generation attempt {attempt + 1}/{retry_count}")
-
-                response = self.model.generate_content(
-                    prompt,
-                    generation_config=genai.types.GenerationConfig(
-                        temperature=temperature,
-                        max_output_tokens=max_tokens,
-                        top_p=0.95,
-                        top_k=40,
-                    ),
-                    safety_settings=self.safety_settings,
-                )
-
-                # Check if response is valid
-                if response.text:
-                    logger.debug("Successfully generated response from Gemini")
-                    return response.text.strip()
-                else:
-                    logger.warning(
-                        f"Empty response from Gemini: {response.prompt_feedback}"
-                    )
-                    if attempt < retry_count - 1:
-                        await self._wait_before_retry(attempt)
-                        continue
-                    return self._get_fallback_response(
-                        "I need more context to provide a helpful response. Please provide additional details."
-                    )
-
-            except ResourceExhausted as e:
-                logger.warning(f"Rate limit exceeded (attempt {attempt + 1}): {str(e)}")
-                if attempt < retry_count - 1:
-                    wait_time = self._exponential_backoff(attempt)
-                    logger.info(f"Waiting {wait_time} seconds before retry...")
-                    await self._wait_before_retry(attempt)
-                else:
-                    return self._get_fallback_response(
-                        "Service is currently busy. Please try again in a moment."
-                    )
-
-            except DeadlineExceeded as e:
-                logger.warning(f"Request timeout (attempt {attempt + 1}): {str(e)}")
-                if attempt < retry_count - 1:
-                    await self._wait_before_retry(attempt)
-                else:
-                    return self._get_fallback_response(
-                        "Request timed out. Please try with a simpler prompt."
-                    )
-
-            except Exception as e:
-                logger.error(f"Unexpected error in Gemini generation: {str(e)}")
-                if attempt < retry_count - 1:
-                    await self._wait_before_retry(attempt)
-                else:
-                    return self._get_fallback_response(
-                        f"An error occurred: {str(e)[:100]}"
-                    )
-
-        return self._get_fallback_response(
-            "Unable to generate response after multiple attempts."
+        # Use multi-provider router - will try Gemini first, then Groq, then Together AI
+        result = await self.router.generate_response(
+            prompt=prompt,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            retry_count=retry_count,
+            timeout=timeout,
+            preferred_provider='gemini'  # Try Gemini first
         )
+
+        if result['success']:
+            logger.debug(f"Response generated via {result['provider']} in {result['latency']:.0f}ms")
+            return result['content']
+        else:
+            logger.warning(f"All LLM providers failed: {result['content']}")
+            return result['content']
 
     @staticmethod
     async def _wait_before_retry(attempt: int):
         """Wait before retrying with exponential backoff"""
+        import asyncio
         wait_time = 2 ** attempt
-        await __import__("asyncio").sleep(wait_time)
+        await asyncio.sleep(wait_time)
 
     @staticmethod
     def _exponential_backoff(attempt: int) -> int:
@@ -185,14 +148,23 @@ class GeminiClient:
             Async generator yielding response chunks
         """
         try:
-            response = self.model.generate_content(
-                prompt,
-                generation_config=genai.types.GenerationConfig(
-                    temperature=temperature,
-                    max_output_tokens=2048,
+            import asyncio
+            loop = asyncio.get_event_loop()
+            
+            response = await asyncio.wait_for(
+                loop.run_in_executor(
+                    None,
+                    lambda: self.model.generate_content(
+                        prompt,
+                        generation_config=genai.types.GenerationConfig(
+                            temperature=temperature,
+                            max_output_tokens=2048,
+                        ),
+                        safety_settings=self.safety_settings,
+                        stream=True,
+                    ),
                 ),
-                safety_settings=self.safety_settings,
-                stream=True,
+                timeout=30,
             )
 
             for chunk in response:
@@ -201,7 +173,11 @@ class GeminiClient:
 
         except Exception as e:
             logger.error(f"Error in streaming generation: {str(e)}")
-            yield f"Error: {str(e)}"
+            logger.info("Falling back to non-streaming response...")
+            
+            # Fall back to non-streaming
+            result = await self.generate_response(prompt, temperature)
+            yield result
 
     async def generate_structured_response(
         self,
@@ -230,13 +206,21 @@ class GeminiClient:
 
         return await self.generate_response(prompt=full_prompt, temperature=temperature)
 
+    def get_provider_health(self) -> dict:
+        """Get health status of all LLM providers"""
+        return self.router.get_provider_status()
+
+    def reset_provider_health(self, provider: Optional[str] = None):
+        """Reset health metrics for a provider (for recovery)"""
+        self.router.reset_provider_metrics(provider)
+
 
 # Global instance
 _gemini_client: Optional[GeminiClient] = None
 
 
 def get_gemini_client() -> GeminiClient:
-    """Get or create Gemini client instance"""
+    """Get or create Gemini client instance (now with multi-provider fallback)"""
     global _gemini_client
     if _gemini_client is None:
         _gemini_client = GeminiClient()
@@ -247,37 +231,47 @@ async def initialize_gemini() -> None:
     """Initialize Gemini client on application startup
     
     Non-fatal initialization - logs warning if unavailable but doesn't crash startup
+    Now includes multi-provider health check
     """
     try:
         client = get_gemini_client()
         
-        # Skip test if not available
-        if not client.available:
-            logger.warning("⚠️ Gemini API not configured - LLM features will be unavailable")
-            return
+        # Check provider status
+        health = client.get_provider_health()
+        logger.info(f"📊 Provider Health: {health}")
         
-        # Test connection if available
-        test_response = await client.generate_response(
-            "Say 'Gemini API is working' in exactly these words.",
-            temperature=0.0,
-        )
-        if test_response and "working" in test_response.lower():
-            logger.info("✅ Gemini API connection verified")
+        # Test with multi-provider router
+        if any(health['providers'].values()):
+            test_response = await client.generate_response(
+                "Say 'LLM system is working' in exactly these words.",
+                temperature=0.0,
+            )
+            if test_response and "working" in test_response.lower():
+                logger.info("✅ Multi-provider LLM system verified")
+            else:
+                logger.warning("⚠️ LLM test returned unexpected response")
         else:
-            logger.warning("⚠️ Gemini API test returned unexpected response")
+            logger.warning("⚠️ No LLM providers configured - LLM features will be unavailable")
+
     except Exception as e:
-        logger.warning(f"⚠️ Failed to initialize Gemini: {str(e)}. LLM features will be unavailable.")
+        logger.warning(f"⚠️ Failed to initialize LLM system: {str(e)}. Features will be unavailable.")
         # Don't re-raise - allow app to start with degraded functionality
 
 
 def is_gemini_available() -> bool:
-    """Check if Gemini API is available and ready to use
+    """Check if any LLM provider is available
     
     Returns:
-        True if Gemini is configured and available, False otherwise
+        True if at least one LLM provider (Gemini, Groq, or Together AI) is configured
     """
     try:
         client = get_gemini_client()
-        return client.available
+        health = client.get_provider_health()
+        
+        # Check if any provider is healthy
+        return any(
+            status['status'] == 'healthy'
+            for status in health['providers'].values()
+        )
     except Exception:
         return False
