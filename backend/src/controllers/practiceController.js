@@ -479,6 +479,16 @@ export const generatePersonalizedQuestions = async (req, res) => {
     const userId = req.user._id;
     const { limit = 5 } = req.query;
 
+    console.log('\n' + '='.repeat(80));
+    console.log('📌 FRONTEND REQUEST RECEIVED');
+    console.log('='.repeat(80));
+    console.log(`   From: Frontend (Practice.tsx)`);
+    console.log(`   Route: POST /api/practice/topics/:topicId/generate-questions`);
+    console.log(`   Topic ID (params): ${topicId}`);
+    console.log(`   User ID (from token): ${userId}`);
+    console.log(`   Limit (query): ${limit}`);
+    console.log('');
+    
     logger.info(`Generating personalized questions for user ${userId}, topic ${topicId}`);
 
     const result = await llmQuestionGenerationService.generatePersonalizedQuestions(
@@ -487,11 +497,29 @@ export const generatePersonalizedQuestions = async (req, res) => {
       { limit: parseInt(limit) }
     );
 
+    console.log('\n✅ RESPONSE READY TO SEND TO FRONTEND');
+    console.log(`   Questions generated: ${result.questions?.length || 0}`);
+    console.log(`   Source: ${result.source}`);
+    console.log('   Result keys:', Object.keys(result));
+    console.log('   Full result:', JSON.stringify(result, null, 2).substring(0, 500));
+    console.log('');
+    
+    // Validate response structure before sending
+    if (!result.questions || !Array.isArray(result.questions)) {
+      console.log('⚠️ WARNING: Questions field missing or not an array!');
+      console.log('   Questions type:', typeof result.questions);
+      console.log('   Questions value:', result.questions);
+    }
+    
     res.status(200).json({
       success: true,
       data: result,
     });
   } catch (error) {
+    console.log(`\n❌ ERROR IN QUESTION GENERATION`);
+    console.log(`   Error: ${error.message}`);
+    console.log('');
+    
     logger.error('Error generating questions:', error);
     res.status(500).json({
       success: false,

@@ -13,7 +13,7 @@ import PracticeAttemptEvent from '../models/PracticeAttemptEvent.js';
 import QuestionBank from '../models/QuestionBank.js';
 import GeneratedQuestionLog from '../models/GeneratedQuestionLog.js';
 
-const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8001';
 
 class LLMQuestionGenerationService {
   /**
@@ -22,13 +22,27 @@ class LLMQuestionGenerationService {
    */
   static async generatePersonalizedQuestions(userId, topicId, options = {}) {
     try {
-      logger.info(`Generating personalized questions for user ${userId}, topic ${topicId}`);
+      logger.info(`\n${'='.repeat(80)}`);
+      logger.info(`🚀 GENERATING PERSONALIZED QUESTIONS`);
+      logger.info(`${'='.repeat(80)}`);
+      logger.info(`📍 User ID: ${userId}`);
+      logger.info(`📍 Topic ID: ${topicId}`);
+      logger.info(`📍 Limit: ${options.limit || 5}`);
 
       // 1. Fetch user profile
       const user = await User.findById(userId);
       if (!user) {
+        logger.error(`❌ User not found: ${userId}`);
         throw new Error('User not found');
       }
+      logger.info(`✅ User found: ${user.name || user.email}`);
+      
+      console.log(`\n📊 USER DATA FROM DATABASE:`);
+      console.log(`   Name: ${user.fullName || user.name || 'MISSING'}`);
+      console.log(`   Email: ${user.email}`);
+      console.log(`   Learning Level: ${user.learningLevel || 'MISSING'}`);
+      console.log(`   Target Companies: ${user.targetCompaniesArray?.join(', ') || 'MISSING'}`);
+      console.log(`   Preparation Phase: ${user.preparationPhase || 'MISSING'}`);
 
       // 2. Fetch topic intelligence data
       const progression = await UserTopicProgression.findOne({
@@ -38,7 +52,36 @@ class LLMQuestionGenerationService {
       
       const topic = await Topic.findOne({ topicId });
       if (!topic) {
+        logger.error(`❌ Topic not found: ${topicId}`);
         throw new Error('Topic not found');
+      }
+      logger.info(`✅ Topic found: ${topic.name}`);
+      
+      console.log(`\n📊 TOPIC DATA FROM DATABASE:`);
+      console.log(`   Topic ID: ${topic.topicId}`);
+      console.log(`   Topic Name: ${topic.name || 'MISSING'}`);
+      console.log(`   Topic Description: ${topic.description ? 'Present' : 'MISSING'}`);
+      console.log(`   Topic Active: ${topic.isActive}`);
+      
+      console.log(`\n📊 PROGRESSION DATA FROM DATABASE:`);
+      if (progression) {
+        console.log(`   Mastery Score: ${progression.masteryScore || 0}`);
+        console.log(`   Readiness Score: ${progression.progressionReadinessScore || 0}`);
+        console.log(`   Accuracy Rate: ${progression.accuracyRate || 0}%`);
+        console.log(`   Retention Probability: ${progression.retentionProbability || 0}`);
+        console.log(`   Current Difficulty: ${progression.currentDifficultyLevel || 'MISSING'}`);
+        console.log(`   Total Attempts: ${progression.progressionStats?.totalAttempts || 0}`);
+        console.log(`   Successful Attempts: ${progression.progressionStats?.successfulAttempts || 0}`);
+      } else {
+        console.log(`   ⚠️ NO PROGRESSION DATA FOUND FOR THIS TOPIC`);
+      }
+      
+      if (progression) {
+        logger.info(`   Mastery: ${progression.masteryScore}/100`);
+        logger.info(`   Readiness: ${progression.progressionReadinessScore || 0}/100`);
+        logger.info(`   Accuracy: ${progression.accuracyRate || 0}%`);
+      } else {
+        logger.info(`   No progression data found for this topic`);
       }
 
       // 3. Get recent attempt patterns for mistake analysis
@@ -54,7 +97,7 @@ class LLMQuestionGenerationService {
       // 5. Build comprehensive learner profile for Gemini
       const learnerProfile = {
         userId: user._id,
-        userName: user.fullName || 'Student',
+        userName: user.fullName || user.name || 'Student',
         learningLevel: user.learningLevel || 'intermediate',
         targetCompanies: user.targetCompaniesArray?.join(', ') || 'General tech roles',
         preparationGoal: user.preparationPhase || 'practice',
@@ -71,17 +114,72 @@ class LLMQuestionGenerationService {
         recommendedDifficulty: progression?.currentDifficultyLevel || 'Easy',
         desiredQuestionCount: options.limit || 5,
       };
+      
+      logger.info(`\n📊 LEARNER PROFILE PREPARED:`);
+      logger.info(`   Name: ${learnerProfile.userName}`);
+      logger.info(`   Level: ${learnerProfile.learningLevel}`);
+      logger.info(`   Mastery: ${learnerProfile.masteryScore}/100`);
+      logger.info(`   Readiness: ${learnerProfile.progressionReadinessScore}/100`);
+      logger.info(`   Topic: ${learnerProfile.topicId}`);
+      logger.info(`   Difficulty: ${learnerProfile.recommendedDifficulty}`);
 
       // 6. Call Gemini via Python AI service to generate questions
       const llmResponse = await this.callGeminiForQuestions(learnerProfile, options.limit || 5);
 
-      if (!llmResponse.success || !llmResponse.questions || llmResponse.questions.length === 0) {
-        logger.error(`❌ LLM question generation failed - Gemini API not configured or returned empty response`);
+      logger.info(`\n📋 LLM RESPONSE RECEIVED (from callGeminiForQuestions):`);
+      logger.info(`   Success: ${llmResponse.success}`);
+      logger.info(`   Message: ${llmResponse.message}`);
+      logger.info(`   Questions count: ${llmResponse.questions?.length || 0}`);
+      logger.info(`   Full response:`, JSON.stringify(llmResponse, null, 2).substring(0, 500));
+
+      // Validate response - success:false is error, success:true with empty questions is OK (fallback will be used)
+      if (!llmResponse.success) {
+        logger.error(`❌ LLM question generation failed`);
+        logger.error(`   success: ${llmResponse.success}`);
+        logger.error(`   questions exists: ${!!llmResponse.questions}`);
+        logger.error(`   questions is array: ${Array.isArray(llmResponse.questions)}`);
+        logger.error(`   questions length: ${llmResponse.questions?.length || 0}`);
+        logger.error(`   Full llmResponse:`, JSON.stringify(llmResponse, null, 2));
+        
+        // Use fallback questions from database instead of returning error
+        console.log(`\n⚠️  AI SERVICE FAILED, USING FALLBACK QUESTIONS FROM DATABASE`);
+        logger.warn(`Using fallback questions from database`);
+        const fallbackQuestions = await this.getFallbackQuestionsFromDatabase(topicId, options.limit || 5);
+        
+        if (fallbackQuestions && fallbackQuestions.length > 0) {
+          console.log(`   Found ${fallbackQuestions.length} fallback questions from database`);
+          return {
+            success: true,
+            topic: topic.name,
+            recommendedDifficulty: learnerProfile.recommendedDifficulty,
+            questions: fallbackQuestions,
+            generatedAt: new Date(),
+            source: 'fallback-database',
+          };
+        }
+        
+        // If no fallback available, return error
         return {
           success: false,
           topic: topic.name,
           recommendedDifficulty: learnerProfile.recommendedDifficulty,
-          message: 'Failed to generate personalized questions. Please ensure Gemini API (GEMINI_API_KEY) is properly configured.',
+          message: llmResponse.message || 'Failed to generate personalized questions. Please ensure Gemini API (GEMINI_API_KEY) is properly configured.',
+          questions: [],
+          source: 'error',
+          generatedAt: new Date(),
+        };
+      }
+
+      // Ensure questions is an array
+      const questionsArray = llmResponse.questions || [];
+      if (!Array.isArray(questionsArray)) {
+        logger.error(`❌ Questions is not an array!`);
+        logger.error(`   Type: ${typeof questionsArray}`);
+        return {
+          success: false,
+          topic: topic.name,
+          recommendedDifficulty: learnerProfile.recommendedDifficulty,
+          message: 'Invalid response format from AI service',
           questions: [],
           source: 'error',
           generatedAt: new Date(),
@@ -92,7 +190,7 @@ class LLMQuestionGenerationService {
       const processedQuestions = await this.processAndDeduplicateQuestions(
         userId,
         topicId,
-        llmResponse.questions || []
+        questionsArray
       );
 
       // 8. Store generated questions to database
@@ -121,8 +219,21 @@ class LLMQuestionGenerationService {
    */
   static async callGeminiForQuestions(learnerProfile, limit) {
     try {
-      logger.info(`Calling Gemini for ${limit} questions on topic: ${learnerProfile.topicId}`);
-
+      logger.info(`\n🤖 CALLING AI SERVICE (Python/Gemini)`);
+      logger.info(`   Endpoint: POST ${AI_SERVICE_URL}/ai/practice/generate-questions`);
+      logger.info(`   Questions needed: ${limit}`);
+      logger.info(`   Topic: ${learnerProfile.topicId}`);
+      logger.info(`   User: ${learnerProfile.userName}`);
+      
+      console.log('\n' + '='.repeat(80));
+      console.log('🤖 CALLING PYTHON AI SERVICE');
+      console.log('='.repeat(80));
+      console.log(`   URL: ${AI_SERVICE_URL}/ai/practice/generate-questions`);
+      console.log(`   Learner Profile topicId: ${learnerProfile.topicId}`);
+      console.log(`   Limit: ${limit}`);
+      console.log(`\n📊 FULL LEARNER PROFILE BEING SENT:`);
+      console.log(JSON.stringify(learnerProfile, null, 2));
+      
       const response = await axios.post(
         `${AI_SERVICE_URL}/ai/practice/generate-questions`,
         {
@@ -132,27 +243,106 @@ class LLMQuestionGenerationService {
         { timeout: 30000 }
       );
 
+      console.log(`\n✅ AXIOS POST CALL SUCCESSFUL (Status ${response.status})`);
+      console.log(`   Response object type: ${typeof response}`);
+      console.log(`   Response.data type: ${typeof response.data}`);
+      console.log(`   Response.data is null: ${response.data === null}`);
+      console.log(`   Response.data is undefined: ${response.data === undefined}`);
+      
+      // Stringify the entire response.data to see raw structure
+      console.log(`\n📊 RAW RESPONSE DATA:`);
+      const rawResponseStr = JSON.stringify(response.data);
+      console.log(`   Length: ${rawResponseStr.length}`);
+      console.log(rawResponseStr.substring(0, 1500));
+      
+      // Check each critical field
+      console.log(`\n📋 FIELD-BY-FIELD ANALYSIS:`);
+      console.log(`   response.data.success exists: ${response.data.success !== undefined}`);
+      console.log(`   response.data.success value: ${response.data.success}`);
+      console.log(`   response.data.success type: ${typeof response.data.success}`);
+      console.log(`   response.data.success === true: ${response.data.success === true}`);
+      console.log(`   response.data.success === false: ${response.data.success === false}`);
+      console.log(`   Boolean(response.data.success): ${Boolean(response.data.success)}`);
+      console.log(`   !response.data.success: ${!response.data.success}`);
+      
+      if (response.data.questions) {
+        console.log(`   response.data.questions length: ${response.data.questions.length}`);
+        console.log(`   response.data.questions is array: ${Array.isArray(response.data.questions)}`);
+      } else {
+        console.log(`   response.data.questions is falsy/missing`);
+      }
+
+      console.log(`\n✅ AI SERVICE RESPONSE RECEIVED`);
+      console.log(`   Status: ${response.status}`);
+      console.log(`   Success: ${response.data.success}`);
+      console.log(`   Questions: ${response.data.questions?.length || 0}`);
+      console.log(`   Source: ${response.data.source}`);
+      console.log(`   Full response keys:`, Object.keys(response.data));
+      console.log(`   Message: ${response.data.message}`);
+      console.log(`   Error Field: ${response.data.error}`);
+      console.log(`\n   FULL RESPONSE DATA (parsed):`);
+      console.log(JSON.stringify(response.data, null, 2));
+      
+      logger.info(`✅ AI Service responded`);
+      logger.info(`   Status: ${response.status}`);
+      logger.info(`   Success: ${response.data.success}`);
+      logger.info(`   Response type: ${typeof response.data}`);
+      logger.info(`   Response keys: ${Object.keys(response.data).join(', ')}`);
+      logger.info(`   Questions type: ${typeof response.data.questions}`);
+      logger.info(`   Questions is array: ${Array.isArray(response.data.questions)}`);
+      logger.info(`   Full response dump:`, JSON.stringify(response.data, null, 2));
+      logger.info(`   Full response:`, JSON.stringify(response.data, null, 2).substring(0, 1000));
+
       if (!response.data.success) {
-        logger.warn(`Gemini returned non-success: ${response.data.error}`);
+        console.log(`\n❌ AI SERVICE RETURNED non-success`);
+        console.log(`   Message: ${response.data.message}`);
+        console.log(`   Error: ${response.data.error}`);
+        
+        logger.error(`❌ AI Service returned non-success`);
+        logger.error(`   Error message: ${response.data.message || response.data.error}`);
+        logger.error(`   Full error response:`, JSON.stringify(response.data, null, 2));
         return {
           success: false,
           questions: [],
-          error: response.data.error || 'Gemini generation failed',
+          message: response.data.message || response.data.error || 'AI generation failed',
+          error: response.data.error || 'AI generation failed',
         };
       }
 
-      logger.info(`✅ Gemini generated ${response.data.questions?.length || 0} questions`);
+      const questionsGenerated = response.data.questions?.length || 0;
+      console.log(`✅ Successfully generated ${questionsGenerated} questions`);
+      
+      logger.info(`✅ Generated ${questionsGenerated} questions`);
+      if (questionsGenerated > 0) {
+        logger.info(`   Q1: ${response.data.questions[0].problemTitle}`);
+      }
+      
       return {
         success: true,
         questions: response.data.questions || [],
         source: response.data.source || 'gemini',
+        message: response.data.message || 'Questions generated successfully',
       };
     } catch (error) {
-      logger.error(`Gemini service error: ${error.message}`);
+      console.log(`\n❌ AXIOS ERROR CALLING AI SERVICE`);
+      console.log(`   Error: ${error.message}`);
+      console.log(`   Code: ${error.code}`);
+      console.log(`   Status: ${error.response?.status}`);
+      
+      logger.error(`\n❌ AI SERVICE ERROR`);
+      logger.error(`   Error: ${error.message}`);
+      logger.error(`   Code: ${error.code}`);
+      logger.error(`   URL: ${AI_SERVICE_URL}/ai/practice/generate-questions`);
+      logger.error(`   Make sure AI service is running on port 8001`);
+      if (error.response?.data) {
+        logger.error(`   AI Service Response:`, JSON.stringify(error.response.data, null, 2));
+      }
+      
       return {
         success: false,
         questions: [],
-        error: `Gemini service unavailable: ${error.message}`,
+        message: `AI service unavailable: ${error.message}`,
+        error: `AI service unavailable: ${error.message}`,
       };
     }
   }
@@ -472,6 +662,54 @@ Generate ${learnerProfile.desiredQuestionCount} questions now.`;
     } catch (error) {
       logger.error(`Error storing generated questions: ${error.message}`);
       throw error;
+    }
+  }
+
+  /**
+   * Get fallback questions from QuestionBank when LLM fails
+   */
+  static async getFallbackQuestionsFromDatabase(topicId, limit = 5) {
+    try {
+      logger.info(`\n📚 FETCHING FALLBACK QUESTIONS FROM DATABASE`);
+      logger.info(`   Topic ID: ${topicId}`);
+      logger.info(`   Limit: ${limit}`);
+
+      // Find questions related to this topic
+      const questions = await QuestionBank.find({
+        $or: [
+          { topic: { $regex: topicId, $options: 'i' } },
+          { tags: { $in: [topicId] } },
+          { category: topicId },
+        ],
+      })
+        .limit(limit)
+        .lean();
+
+      if (!questions || questions.length === 0) {
+        logger.warn(`⚠️ No fallback questions found for topic: ${topicId}`);
+        return [];
+      }
+
+      logger.info(`✅ Found ${questions.length} fallback questions`);
+
+      // Transform to expected format
+      const formatted = questions.map((q) => ({
+        problemTitle: q.title || q.problemTitle || 'Unknown Problem',
+        topic: q.topic || topicId,
+        difficulty: q.difficulty || 'Medium',
+        primaryConceptTested: q.category || 'General',
+        whyRecommended: q.description || 'Practice problem from our database',
+        hints: q.hints || [],
+        approachGuide: q.solution || 'See solution in database',
+        generatedFor: topicId,
+        learnerLevel: 'intermediate',
+        _id: q._id,
+      }));
+
+      return formatted;
+    } catch (error) {
+      logger.error(`Error fetching fallback questions: ${error.message}`);
+      return [];
     }
   }
 }

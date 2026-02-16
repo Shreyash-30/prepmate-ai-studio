@@ -4,6 +4,7 @@ import { ArrowRight, BookOpen, Brain, Code2, Database, Cpu, Network, ChevronRigh
 import { useAllRecommendations } from '@/hooks/useTopicRecommendations';
 import { useProgressionStatus, useProgressionReport } from '@/hooks/useProgressionStatus';
 import { useQuestionSelection, useGeneratePersonalizedQuestions } from '@/hooks/useQuestionSelection';
+import { useQuestionGenerationFlow } from '@/hooks/useQuestionGenerationFlow';
 import { QuestionCard } from '@/components/QuestionCard';
 import { Button } from '@/components/ui/button';
 
@@ -41,6 +42,9 @@ export default function Practice() {
 
   // Generate personalized LLM-based questions
   const { generateQuestions, questions: llmQuestions, loading: llmLoading, error: llmError } = useGeneratePersonalizedQuestions();
+
+  // Debug hook to trace question generation flow
+  useQuestionGenerationFlow(selectedTopicId, useLLMQuestions, llmQuestions || [], llmLoading, llmError);
 
   // Auto-generate LLM questions when topic is selected
   useEffect(() => {
@@ -273,7 +277,7 @@ export default function Practice() {
           <div className="glass-card p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold text-foreground">AI-Personalized Problems</h3>
-              {useLLMQuestions && !llmError && (
+              {useLLMQuestions && !llmError && llmQuestions.length > 0 && (
                 <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded">AI Generated</span>
               )}
             </div>
@@ -293,7 +297,7 @@ export default function Practice() {
                   {llmLoading ? 'Generating personalized questions...' : 'Loading problems...'}
                 </span>
               </div>
-            ) : (useLLMQuestions && llmQuestions.length > 0) ? (
+            ) : (useLLMQuestions && llmQuestions && llmQuestions.length > 0) ? (
               <div className="space-y-3 max-h-96 overflow-y-auto">
                 {llmQuestions.map((question, idx) => (
                   <QuestionCard
@@ -316,17 +320,7 @@ export default function Practice() {
                   />
                 ))}
               </div>
-            ) : llmError ? (
-              <div className="p-6 text-center bg-destructive/5 rounded-lg border border-destructive/20">
-                <p className="text-sm text-destructive font-medium mb-2">❌ LLM Generation Failed</p>
-                <p className="text-xs text-muted-foreground">{llmError}</p>
-                <p className="text-xs text-muted-foreground mt-3">Please check that the AI service is running with GEMINI_API_KEY configured.</p>
-              </div>
-            ) : (useLLMQuestions && !llmLoading) ? (
-              <div className="p-6 text-center bg-accent/50 rounded-lg">
-                <p className="text-sm text-muted-foreground">No AI-personalized questions generated yet</p>
-              </div>
-            ) : nextProblems.length > 0 ? (
+            ) : !useLLMQuestions && nextProblems.length > 0 ? (
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {nextProblems.map((problem, idx) => (
                   <div key={idx} className="flex items-center justify-between rounded-md bg-accent/50 p-3">
@@ -351,6 +345,10 @@ export default function Practice() {
                     </a>
                   </div>
                 ))}
+              </div>
+            ) : useLLMQuestions && !llmLoading && llmQuestions.length === 0 ? (
+              <div className="p-6 text-center bg-accent/50 rounded-lg">
+                <p className="text-sm text-muted-foreground">No AI-personalized questions generated yet</p>
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">No problems loaded yet</p>
