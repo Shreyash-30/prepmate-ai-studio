@@ -95,6 +95,28 @@ class LLMQuestionGenerationService {
       const weakSubtopics = this.identifyWeakSubtopics(recentAttempts);
 
       // 5. Build comprehensive learner profile for Gemini
+      // Calculate recommended difficulty based on mastery score
+      const calculateRecommendedDifficulty = (masteryScore, readinessScore) => {
+        // If user has high mastery, recommend harder problems for growth
+        if (masteryScore >= 80 || readinessScore >= 80) {
+          return 'Hard';
+        }
+        if (masteryScore >= 50 || readinessScore >= 50) {
+          return 'Medium';
+        }
+        return 'Easy';
+      };
+
+      const masteryScore = progression?.masteryScore || 0;
+      const readinessScore = progression?.progressionReadinessScore || 0;
+      const recommendedDifficulty = calculateRecommendedDifficulty(masteryScore, readinessScore);
+      
+      console.log(`\n⚡ ADAPTIVE DIFFICULTY SELECTION:`);
+      console.log(`   Mastery Score: ${masteryScore}`);
+      console.log(`   Readiness Score: ${readinessScore}`);
+      console.log(`   Stored Difficulty Level: ${progression?.currentDifficultyLevel || 'Easy'}`);
+      console.log(`   RECOMMENDED DIFFICULTY: ${recommendedDifficulty} ✅`);
+
       const learnerProfile = {
         userId: user._id,
         userName: user.fullName || user.name || 'Student',
@@ -103,15 +125,15 @@ class LLMQuestionGenerationService {
         preparationGoal: user.preparationPhase || 'practice',
         topicId: topic.name,
         topicDescription: topic.description || '',
-        masteryScore: progression?.masteryScore || 0,
-        progressionReadinessScore: progression?.progressionReadinessScore || 0,
+        masteryScore: masteryScore,
+        progressionReadinessScore: readinessScore,
         retentionProbability: progression?.retentionProbability || 0,
         currentDifficultyLevel: progression?.currentDifficultyLevel || 'Easy',
         totalAttempts: progression?.progressionStats?.totalAttempts || 0,
         successfulAttempts: progression?.progressionStats?.successfulAttempts || 0,
         weakSubtopics: weakSubtopics.join(', ') || 'Various',
         recentMistakePatterns: mistakePatterns.join(', ') || 'General mistakes',
-        recommendedDifficulty: progression?.currentDifficultyLevel || 'Easy',
+        recommendedDifficulty: recommendedDifficulty,
         desiredQuestionCount: options.limit || 5,
       };
       

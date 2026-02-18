@@ -1,4 +1,6 @@
-# Logs
+# ============================================================================
+# LOGS AND TEMPORARY FILES
+# ============================================================================
 logs
 *.log
 npm-debug.log*
@@ -7,22 +9,90 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# ============================================================================
+# BUILD AND DEPENDENCIES
+# ============================================================================
 node_modules
 dist
 dist-ssr
 *.local
+.venv/
+venv/
+env/
 
-# Environment variables and sensitive data
+# ============================================================================
+# ENVIRONMENT VARIABLES AND SECRETS - DO NOT COMMIT
+# ============================================================================
+# All .env files - local development must use .env.example as template
 .env
 .env.local
 .env.*.local
 .env.production.local
 .env.development.local
+.env.test.local
+
+# Specific env files in subdirectories
 ai-services/.env
+backend/.env
+frontend/.env
+
+# Local environment overrides
+.env.user
+.env.private
+
+# ============================================================================
+# SECRET FILES
+# ============================================================================
+*.key
+*.pem
+*.pfx
+*.p12
+secret*
+credentials*
+auth*
+token*
+api_key*
+apikey*
+
+# ============================================================================
+# PYTHON-SPECIFIC
+# ============================================================================
 ai-services/__pycache__/
 ai-services/*.pkl
 ai-services/models/*.pkl
 .pytest_cache
 *.pyc
 __pycache__/
+*.egg-info/
+dist/
+build/
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ============================================================================
+# IDE AND EDITOR
+# ============================================================================
+.vscode/settings.json
+.vscode/launch.json
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ============================================================================
+# DATABASE AND CACHE
+# ============================================================================
+*.db
+*.sqlite
+*.sqlite3
+.cache/
+
+# ============================================================================
+# OS SPECIFIC
+# ============================================================================
+.DS_Store
+Thumbs.db
+.env.*.swp
 
