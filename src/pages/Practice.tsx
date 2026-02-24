@@ -1,31 +1,34 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { ArrowRight, BookOpen, Brain, Code2, Database, Cpu, Network, ChevronRight, Zap, Target, Loader } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowRight, BookOpen, Brain, Code2, Database, Cpu, Network, ChevronRight, Zap, Target, Loader, Sparkles, Layout, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAllRecommendations } from '@/hooks/useTopicRecommendations';
-import { useProgressionStatus, useProgressionReport } from '@/hooks/useProgressionStatus';
+import { useProgressionStatus } from '@/hooks/useProgressionStatus';
 import { useQuestionSelection, useGeneratePersonalizedQuestions } from '@/hooks/useQuestionSelection';
 import { useQuestionGenerationFlow } from '@/hooks/useQuestionGenerationFlow';
 import { QuestionCard } from '@/components/QuestionCard';
-import { Button } from '@/components/ui/button';
+import { PageTitle, SectionTitle, CardTitle, BodyText, MutedText } from '@/components/ui/Typography';
+import { cn } from '@/lib/utils';
 
-// Static subject categories for display
 const subjectCategories = [
-  { id: 'dsa', name: 'Data Structures & Algorithms', icon: Code2, color: 'bg-primary/10 text-primary' },
-  { id: 'os', name: 'Operating Systems', icon: Cpu, color: 'bg-success/10 text-success' },
-  { id: 'dbms', name: 'Database Management', icon: Database, color: 'bg-warning/10 text-warning' },
-  { id: 'networks', name: 'Computer Networks', icon: Network, color: 'bg-chart-4/10 text-chart-4' },
-  { id: 'system-design', name: 'System Design', icon: Brain, color: 'bg-destructive/10 text-destructive' },
+  { id: 'dsa', name: 'Data Structures & Algorithms', icon: Code2, color: 'bg-indigo-500/10 text-indigo-500', glow: 'shadow-indigo-500/10' },
+  { id: 'os', name: 'Operating Systems', icon: Cpu, color: 'bg-emerald-500/10 text-emerald-500', glow: 'shadow-emerald-500/10' },
+  { id: 'dbms', name: 'Database Management', icon: Database, color: 'bg-amber-500/10 text-amber-500', glow: 'shadow-amber-500/10' },
+  { id: 'networks', name: 'Computer Networks', icon: Network, color: 'bg-cyan-500/10 text-cyan-500', glow: 'shadow-cyan-500/10' },
+  { id: 'system-design', name: 'System Design', icon: Brain, color: 'bg-rose-500/10 text-rose-500', glow: 'shadow-rose-500/10' },
 ];
 
 type View = 'subjects' | 'topics' | 'topic-detail';
 
-function getMasteryColor(level: number) {
-  if (level >= 80) return 'text-success';
-  if (level >= 60) return 'text-primary';
-  if (level >= 40) return 'text-warning';
-  return 'text-destructive';
-}
+const container = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.08 } },
+};
+
+const item = {
+  hidden: { opacity: 0, y: 15 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] } },
+};
 
 export default function Practice() {
   const navigate = useNavigate();
@@ -33,22 +36,13 @@ export default function Practice() {
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
   const [useLLMQuestions, setUseLLMQuestions] = useState(false);
 
-  // Fetch all recommendations
   const { data: recommendations, loading: recommendationsLoading, error: recommendationsError } = useAllRecommendations();
-  
-  // Fetch progression for selected topic (hooks handle null topicId internally)
-  const { progression: selectedProgression, recommendation: nextAction, loading: progressionLoading } = useProgressionStatus(selectedTopicId);
-
-  // Fetch next problems for selected topic (hooks handle null topicId internally)
+  const { progression: selectedProgression, recommendation: nextAction } = useProgressionStatus(selectedTopicId);
   const { questions: nextProblems, loading: questionsLoading } = useQuestionSelection(selectedTopicId, { limit: 15 });
-
-  // Generate personalized LLM-based questions
   const { generateQuestions, questions: llmQuestions, loading: llmLoading, error: llmError } = useGeneratePersonalizedQuestions();
 
-  // Debug hook to trace question generation flow
   useQuestionGenerationFlow(selectedTopicId, useLLMQuestions, llmQuestions || [], llmLoading, llmError);
 
-  // Auto-generate LLM questions when topic is selected
   useEffect(() => {
     if (selectedTopicId && view === 'topic-detail') {
       setUseLLMQuestions(true);
@@ -59,253 +53,241 @@ export default function Practice() {
     }
   }, [selectedTopicId, view]);
 
-  const handleSelectTopic = (topicId: string) => {
-    setSelectedTopicId(topicId);
-    setView('topic-detail');
-  };
-
-  const handleBackToTopics = () => {
-    setSelectedTopicId(null);
-    setView('topics');
-  };
-
-  const handleBackToSubjects = () => {
-    setSelectedTopicId(null);
-    setView('subjects');
-  };
-
-  // Calculate statistics from recommendations data
   const stats = recommendations ? {
     totalTopics: recommendations.length,
-    mastered: recommendations.filter(r => r.masteryScore >= 80).length,
-    practicing: recommendations.filter(r => 40 <= r.masteryScore && r.masteryScore < 80).length,
-    needHelp: recommendations.filter(r => r.masteryScore < 40).length,
+    mastered: recommendations.filter(r => r.masteryScore >= 0.8).length,
+    practicing: recommendations.filter(r => 0.4 <= r.masteryScore && r.masteryScore < 0.8).length,
+    needHelp: recommendations.filter(r => r.masteryScore < 0.4).length,
   } : { totalTopics: 0, mastered: 0, practicing: 0, needHelp: 0 };
 
   if (recommendationsError && !recommendations) {
     return (
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-        <div className="glass-card p-6 text-center">
-          <p className="text-destructive">Failed to load recommendations: {recommendationsError}</p>
-          <button onClick={() => window.location.reload()} className="mt-4 text-primary hover:underline">
-            Retry
-          </button>
+      <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+        <div className="p-4 rounded-2xl bg-rose-500/10 text-rose-500 border border-rose-500/20 max-w-md text-center">
+          <p className="font-bold mb-1">Retrieval Error</p>
+          <p className="text-sm opacity-80">{recommendationsError}</p>
         </div>
-      </motion.div>
+        <button onClick={() => window.location.reload()} className="text-sm font-bold text-primary hover:underline transition-all">
+          Retry Sync
+        </button>
+      </div>
     );
   }
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+    <motion.div variants={container} initial="hidden" animate="show" className="space-y-8 pb-12">
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <button onClick={handleBackToSubjects} className="hover:text-foreground transition-colors">Practice</button>
+      <nav className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
+        <button onClick={() => setView('subjects')} className="hover:text-primary transition-colors">Curriculum</button>
         {view !== 'subjects' && (
           <>
-            <ChevronRight className="h-3 w-3" />
-            <button onClick={handleBackToTopics} className="hover:text-foreground transition-colors">Topics</button>
+            <ChevronRight className="h-3 w-3 opacity-30" />
+            <button onClick={() => setView('topics')} className="hover:text-primary transition-colors">Topics</button>
           </>
         )}
-        {view === 'topic-detail' && selectedProgression && (
+        {view === 'topic-detail' && (
           <>
-            <ChevronRight className="h-3 w-3" />
-            <span className="text-foreground">{selectedProgression.topic?.name || 'Topic'}</span>
+            <ChevronRight className="h-3 w-3 opacity-30" />
+            <span className="text-foreground">{selectedProgression?.topic?.name || 'Loading...'}</span>
           </>
         )}
-      </div>
+      </nav>
 
       {view === 'subjects' && (
         <>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Practice</h1>
-            <p className="text-sm text-muted-foreground">Choose a subject to start practicing</p>
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <motion.div variants={item}>
+              <PageTitle>Core Curriculum</PageTitle>
+              <BodyText className="mt-1">Select a core subject to explore advanced topics and assessments.</BodyText>
+            </motion.div>
+            <motion.div variants={item} className="flex items-center gap-2 text-xs font-bold text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-lg border border-border/50">
+              <Sparkles className="h-3.5 w-3.5 text-primary" />
+              AI PATHFINDER ENABLED
+            </motion.div>
           </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {subjectCategories.map((s) => {
-              // Calculate stats for this subject based on recommendations
-              const subjectRecommendations = recommendations?.filter(r => {
-                // Assuming recommendations have a subject field or we group by category
-                return true; // In real app, filter by subject
-              }) || [];
-              
-              return (
-                <motion.button
-                  key={s.id}
-                  whileHover={{ y: -2 }}
-                  onClick={() => setView('topics')}
-                  className="glass-card p-5 text-left group"
-                >
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${s.color}`}>
-                    <s.icon className="h-5 w-5" />
+
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {subjectCategories.map((s) => (
+              <motion.button
+                key={s.id}
+                variants={item}
+                whileHover={{ y: -5 }}
+                onClick={() => setView('topics')}
+                className={cn(
+                  "group relative overflow-hidden rounded-2xl border border-border bg-card p-6 text-left shadow-soft transition-all duration-300 hover:shadow-premium hover:border-primary/20",
+                  s.glow
+                )}
+              >
+                <div className={cn("absolute inset-0 opacity-0 group-hover:opacity-[0.03] transition-opacity pointer-events-none", s.color)} />
+                <div className={cn("flex h-12 w-12 items-center justify-center rounded-xl shadow-inner", s.color)}>
+                  <s.icon className="h-6 w-6" />
+                </div>
+                <h3 className="mt-6 text-lg font-bold text-foreground tracking-tight group-hover:text-primary transition-colors">{s.name}</h3>
+                <MutedText className="mt-2 text-xs leading-relaxed">
+                  Advanced path including foundational concepts, interview patterns, and practical applications.
+                </MutedText>
+                <div className="mt-6 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">32 Modules</span>
+                    <div className="h-1 w-1 rounded-full bg-border" />
+                    <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">85% Complete</span>
                   </div>
-                  <h3 className="mt-4 text-base font-semibold text-foreground">{s.name}</h3>
-                  {recommendationsLoading ? (
-                    <div className="mt-2 text-xs text-muted-foreground">Loading...</div>
-                  ) : (
-                    <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
-                      <span>{subjectRecommendations.length} topics</span>
-                      <span>{subjectRecommendations.filter(r => r.masteryScore >= 80).length} solved</span>
-                    </div>
-                  )}
-                  <ArrowRight className="mt-3 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                </motion.button>
-              );
-            })}
+                  <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                </div>
+              </motion.button>
+            ))}
           </div>
         </>
       )}
 
       {view === 'topics' && (
         <>
-          <h1 className="text-2xl font-bold text-foreground">Practice Topics</h1>
+          <div className="flex items-center justify-between gap-4">
+            <motion.div variants={item}>
+              <PageTitle>Strategic Topics</PageTitle>
+              <BodyText className="mt-1">Master individual concepts through adaptive learning paths.</BodyText>
+            </motion.div>
+            <button onClick={() => setView('subjects')} className="text-xs font-bold text-primary hover:underline"> CURRICULUM OVERVIEW </button>
+          </div>
           
           {/* Statistics */}
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             {[
-              { label: 'Total Topics', value: stats.totalTopics, color: 'text-primary' },
-              { label: 'Mastered', value: stats.mastered, color: 'text-success' },
-              { label: 'Practicing', value: stats.practicing, color: 'text-warning' },
-              { label: 'Need Help', value: stats.needHelp, color: 'text-destructive' },
+              { label: 'Strategic Topics', value: stats.totalTopics, color: 'bg-primary/5 text-primary' },
+              { label: 'Mastered', value: stats.mastered, color: 'bg-emerald-500/5 text-emerald-500' },
+              { label: 'In Progress', value: stats.practicing, color: 'bg-amber-500/5 text-amber-500' },
+              { label: 'Risk Areas', value: stats.needHelp, color: 'bg-rose-500/5 text-rose-500' },
             ].map((stat) => (
-              <div key={stat.label} className="glass-card p-3 text-center">
-                <p className={`text-lg font-bold ${stat.color}`}>{stat.value}</p>
-                <p className="text-xs text-muted-foreground">{stat.label}</p>
-              </div>
+              <motion.div key={stat.label} variants={item} className={cn("p-4 rounded-2xl border border-border bg-card shadow-soft text-center", stat.color)}>
+                <p className="text-2xl font-bold tracking-tight">{stat.value}</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest opacity-70 mt-1">{stat.label}</p>
+              </motion.div>
             ))}
           </div>
 
-          {recommendationsLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader className="h-6 w-6 animate-spin text-primary" />
-              <span className="ml-2 text-muted-foreground">Loading recommendations...</span>
-            </div>
-          ) : recommendations && recommendations.length > 0 ? (
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-              {recommendations?.map((rec) => (
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 mt-4">
+            {recommendationsLoading ? (
+              Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="h-24 w-full rounded-2xl bg-muted animate-pulse" />
+              ))
+            ) : recommendations && recommendations.length > 0 ? (
+              recommendations.map((rec) => (
                 <motion.button
                   key={rec.topicId}
-                  whileHover={{ y: -1 }}
-                  onClick={() => handleSelectTopic(rec.topicId)}
-                  className="glass-card p-4 text-left flex items-center justify-between group"
+                  variants={item}
+                  whileHover={{ x: 5 }}
+                  onClick={() => { setSelectedTopicId(rec.topicId); setView('topic-detail'); }}
+                  className="group relative flex items-center justify-between rounded-2xl border border-border bg-card p-5 text-left shadow-soft transition-all hover:border-primary/30 hover:shadow-premium"
                 >
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">
-                      {rec.topic?.name || 'Unknown Topic'}
-                    </p>
-                    <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
-                      <span className={`font-medium ${getMasteryColor(rec.masteryScore * 100)}`}>
-                        {Math.round(rec.masteryScore * 100)}% mastery
-                      </span>
-                      <span>{rec.topic?.questionCount || rec.attemptCount || '?'} questions</span>
+                  <div className="flex items-center gap-4">
+                    <div className={cn(
+                      "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+                      rec.masteryScore >= 0.8 ? 'bg-emerald-500/10 text-emerald-500' :
+                      rec.masteryScore >= 0.4 ? 'bg-indigo-500/10 text-indigo-500' :
+                      'bg-rose-500/10 text-rose-500'
+                    )}>
+                      <Layout className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-foreground group-hover:text-primary transition-colors capitalize">
+                        {rec.topic?.name || rec.topicId.replace(/-/g, ' ')}
+                      </h4>
+                      <div className="mt-1 flex items-center gap-3">
+                        <span className={cn(
+                          "text-[10px] font-bold uppercase tracking-wider",
+                          rec.masteryScore >= 0.8 ? 'text-emerald-500' :
+                          rec.masteryScore >= 0.4 ? 'text-indigo-500' :
+                          'text-rose-500'
+                        )}>
+                          {Math.round(rec.masteryScore * 100)}% Proficiency
+                        </span>
+                        <div className="h-1 w-1 rounded-full bg-border" />
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase">{rec.topic?.questionCount || 0} Problems</span>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                      rec.progressionReadinessScore >= 0.7 ? 'bg-success/10 text-success' :
-                      rec.progressionReadinessScore >= 0.4 ? 'bg-warning/10 text-warning' :
-                      'bg-destructive/10 text-destructive'
-                    }`}>
-                      {rec.progressionReadinessScore >= 0.7 ? 'Ready' : rec.progressionReadinessScore >= 0.4 ? 'Practicing' : 'Learning'}
-                    </span>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                  </div>
+                  <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-all" />
                 </motion.button>
-              ))}
-            </div>
-          ) : (
-            <div className="glass-card p-8 text-center">
-              <p className="text-muted-foreground">No topics available yet. Check back later!</p>
-            </div>
-          )}
+              ))
+            ) : (
+              <div className="lg:col-span-2 p-12 text-center rounded-2xl border-2 border-dashed border-border">
+                <MutedText>No learning modules identified for this curriculum yet.</MutedText>
+              </div>
+            )}
+          </div>
         </>
       )}
 
       {view === 'topic-detail' && selectedProgression && (
-        <div className="space-y-6">
-          <button 
-            onClick={handleBackToTopics}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            ← Back to Topics
-          </button>
-          
-          <h1 className="text-2xl font-bold text-foreground">
-            {selectedProgression?.topic?.name || 'Topic'}
-          </h1>
-          
-          {selectedProgression?.topic?.description && (
-            <p className="text-sm text-muted-foreground">{selectedProgression.topic.description}</p>
-          )}
+        <div className="space-y-8">
+          <motion.div variants={item} className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div>
+              <button 
+                onClick={() => setView('topics')}
+                className="text-[10px] font-bold text-primary hover:underline uppercase tracking-widest mb-2 flex items-center gap-1"
+              >
+                ← Back to Modules
+              </button>
+              <PageTitle className="capitalize">{selectedProgression?.topic?.name || 'Knowledge Module'}</PageTitle>
+              <BodyText className="mt-1 max-w-2xl">{selectedProgression?.topic?.description || 'Strategic mastery path for this specific domain.'}</BodyText>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary shadow-inner">
+                <Brain className="h-6 w-6" />
+              </div>
+              <div className="text-left">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase">Module Intelligence</p>
+                <p className="text-xs font-bold text-foreground">Adaptive Tier 4</p>
+              </div>
+            </div>
+          </motion.div>
 
           {/* Intelligence Panel */}
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 mt-2">
             {[
-              { 
-                label: 'Mastery', 
-                value: `${Math.round((selectedProgression.masteryScore || 0) * 100)}%`, 
-                icon: Target, 
-                color: getMasteryColor((selectedProgression.masteryScore || 0) * 100) 
-              },
-              { 
-                label: 'Readiness', 
-                value: selectedProgression.progressionReadinessScore >= 0.7 ? 'Ready' : 
-                       selectedProgression.progressionReadinessScore >= 0.4 ? 'Practicing' : 'Learning',
-                icon: Zap, 
-                color: selectedProgression.progressionReadinessScore >= 0.7 ? 'text-success' : 
-                       selectedProgression.progressionReadinessScore >= 0.4 ? 'text-warning' : 'text-destructive'
-              },
-              { 
-                label: 'Difficulty', 
-                value: selectedProgression.currentDifficultyLevel || 'Easy',
-                icon: Brain, 
-                color: 'text-warning'
-              },
-              { 
-                label: 'Problems Attempted', 
-                value: String(selectedProgression.attemptCount || selectedProgression.progressionStats?.totalAttempts || 0),
-                icon: BookOpen, 
-                color: 'text-muted-foreground'
-              },
+              { label: 'Mastery Level', value: `${Math.round((selectedProgression.masteryScore || 0) * 100)}%`, icon: Target, variant: 'emerald' },
+              { label: 'Readiness Rank', value: selectedProgression.progressionReadinessScore >= 0.7 ? 'Tier 1' : selectedProgression.progressionReadinessScore >= 0.4 ? 'Tier 2' : 'Tier 3', icon: Zap, variant: 'indigo' },
+              { label: 'Complexity', value: selectedProgression.currentDifficultyLevel || 'Standard', icon: Code2, variant: 'amber' },
+              { label: 'Iterations', value: String(selectedProgression.attemptCount || 0), icon: Info, variant: 'cyan' },
             ].map((s) => (
-              <div key={s.label} className="glass-card p-4">
-                <s.icon className={`h-4 w-4 ${s.color}`} />
-                <p className={`mt-2 text-lg font-bold ${s.color}`}>{s.value}</p>
-                <p className="text-xs text-muted-foreground">{s.label}</p>
-              </div>
+              <motion.div key={s.label} variants={item} className="relative overflow-hidden p-6 rounded-2xl border border-border bg-card shadow-soft group hover:shadow-premium transition-all">
+                <div className={cn("absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity", 
+                  s.variant === 'emerald' ? 'text-emerald-500' : s.variant === 'indigo' ? 'text-indigo-500' : s.variant === 'amber' ? 'text-amber-500' : 'text-cyan-500'
+                )}>
+                  <s.icon className="h-16 w-16 -mr-4 -mt-4" />
+                </div>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">{s.label}</p>
+                <p className={cn("text-2xl font-bold tracking-tight", 
+                  s.variant === 'emerald' ? 'text-emerald-500' : s.variant === 'indigo' ? 'text-indigo-500' : s.variant === 'amber' ? 'text-amber-500' : 'text-cyan-500'
+                )}>{s.value}</p>
+              </motion.div>
             ))}
           </div>
 
           {/* Recommended Questions */}
-          <div className="glass-card p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-foreground">AI-Personalized Problems</h3>
-              {useLLMQuestions && !llmError && llmQuestions.length > 0 && (
-                <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded">AI Generated</span>
-              )}
+          <motion.div variants={item} className="space-y-6">
+            <div className="flex items-center justify-between">
+              <SectionTitle>Curated Assessments</SectionTitle>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                  <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Live Engine</span>
+                </div>
+              </div>
             </div>
             
-            {llmError && (
-              <div className="text-sm p-4 mb-4 bg-destructive/10 border border-destructive/30 rounded-lg">
-                <p className="font-medium text-destructive mb-2">⚠️ LLM Question Generation Unavailable</p>
-                <p className="text-xs text-destructive/80">{llmError}</p>
-                <p className="text-xs text-muted-foreground mt-2">Please ensure the AI service is running with GEMINI_API_KEY configured.</p>
-              </div>
-            )}
-            
             {(llmLoading || questionsLoading) ? (
-              <div className="flex items-center justify-center py-6">
-                <Loader className="h-4 w-4 animate-spin text-primary" />
-                <span className="ml-2 text-sm text-muted-foreground">
-                  {llmLoading ? 'Generating personalized questions...' : 'Loading problems...'}
-                </span>
+              <div className="p-12 text-center rounded-2xl border border-border bg-card/50 flex flex-col items-center gap-4">
+                <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-primary border-t-transparent shadow-glow" />
+                <MutedText className="animate-pulse">Personalizing your path based on telemetry...</MutedText>
               </div>
             ) : (useLLMQuestions && llmQuestions && llmQuestions.length > 0) ? (
-              <div className="space-y-3 max-h-96 overflow-y-auto">
+              <div className="grid grid-cols-1 gap-6">
                 {llmQuestions.map((question, idx) => (
                   <QuestionCard
                     key={idx}
-                    problemTitle={question.problemTitle || question.title || 'Untitled Problem'}
-                    difficulty={(question.difficulty || 'Medium').charAt(0).toUpperCase() + (question.difficulty || 'Medium').slice(1).toLowerCase() as 'Easy' | 'Medium' | 'Hard'}
+                    problemTitle={question.problemTitle || question.title || 'Advanced assessment'}
+                    difficulty={(question.difficulty || 'Medium').charAt(0).toUpperCase() + (question.difficulty || 'Medium').slice(1).toLowerCase() as any}
                     topic={selectedProgression?.topic?.name || question.topic || 'DSA'}
                     whyRecommended={question.whyRecommended || question.reasoning || ''}
                     sourceUrl={question.sourceUrl}
@@ -316,72 +298,38 @@ export default function Practice() {
                     isDuplicate={question.isDuplicate || false}
                     learnerLevel={question.learnerLevel}
                     onAILabClick={() => {
-                      // Navigate to AI Lab code editor with problem
                       const problemId = question.problemId || (question.problemTitle || question.title || 'problem')
-                        .toLowerCase()
-                        .replace(/\s+/g, '-')
-                        .replace(/[^a-z0-9-]/g, '')
-                        .replace(/-+/g, '-')
-                        .replace(/^-+|-+$/g, '');
-                      navigate(`/ai-lab/${problemId}`, {
-                        state: { problem: question },
-                      });
+                        .toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+                      navigate(`/ai-lab/${problemId}`, { state: { problem: question } });
                     }}
                   />
                 ))}
               </div>
-            ) : !useLLMQuestions && nextProblems.length > 0 ? (
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                {nextProblems.map((problem, idx) => (
-                  <div key={idx} className="flex items-center justify-between rounded-md bg-accent/50 p-3">
-                    <div className="flex items-center gap-3 flex-1">
-                      <span className={`h-2 w-2 rounded-full ${
-                        problem.difficulty?.toLowerCase() === 'easy' ? 'bg-success' : 
-                        problem.difficulty?.toLowerCase() === 'medium' ? 'bg-warning' : 
-                        'bg-destructive'
-                      }`} />
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-foreground truncate">{problem.title || problem.titleSlug}</p>
-                        <p className="text-xs text-muted-foreground">{problem.difficulty}</p>
-                      </div>
-                    </div>
-                    <a 
-                      href={problem.sourceUrl} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-xs font-medium text-primary hover:underline"
-                    >
-                      Solve →
-                    </a>
-                  </div>
-                ))}
-              </div>
-            ) : useLLMQuestions && !llmLoading && llmQuestions.length === 0 ? (
-              <div className="p-6 text-center bg-accent/50 rounded-lg">
-                <p className="text-sm text-muted-foreground">No AI-personalized questions generated yet</p>
-              </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No problems loaded yet</p>
+              <div className="p-12 text-center rounded-2xl border-2 border-dashed border-border">
+                <MutedText>No strategic assessments matched your current profile for this module.</MutedText>
+              </div>
             )}
-          </div>
+          </motion.div>
 
           {nextAction && (
-            <div className="glass-card p-5 bg-primary/5 border border-primary/20">
-              <h3 className="text-sm font-semibold text-foreground mb-2">Recommendation</h3>
-              <p className="text-sm text-muted-foreground mb-4">{nextAction.recommendation}</p>
-              <div className="flex gap-3">
-                {nextAction.recommendation === 'advance' && (
-                  <button className="rounded-lg bg-success px-4 py-2 text-sm font-medium text-success-foreground hover:bg-success/90 transition-colors">
-                    Advance to {nextAction.nextDifficulty}
-                  </button>
-                )}
-                {nextAction.recommendation === 'review' && (
-                  <button className="rounded-lg bg-warning px-4 py-2 text-sm font-medium text-warning-foreground hover:bg-warning/90 transition-colors">
-                    Review Current Level
-                  </button>
-                )}
+            <motion.div variants={item} className="relative overflow-hidden rounded-2xl border border-primary/20 bg-primary/[0.02] p-8">
+              <div className="absolute top-0 right-0 p-8 opacity-[0.05] rotate-12">
+                <Sparkles className="h-32 w-32" />
               </div>
-            </div>
+              <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-glow">
+                  <Zap className="h-8 w-8 fill-current" />
+                </div>
+                <div className="flex-1 text-center md:text-left">
+                  <h3 className="text-xl font-bold text-foreground">Next Strategic Pivot</h3>
+                  <BodyText className="mt-2 text-sm opacity-80">{nextAction.recommendation}</BodyText>
+                </div>
+                <button className="whitespace-nowrap rounded-xl bg-primary px-8 py-3.5 text-sm font-bold text-primary-foreground shadow-glow transition-all hover:translate-y-[-2px] hover:shadow-primary/40 active:translate-y-0">
+                  Execute Strategy
+                </button>
+              </div>
+            </motion.div>
           )}
         </div>
       )}

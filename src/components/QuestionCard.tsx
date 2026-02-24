@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { ExternalLink, Zap, ChevronDown, AlertCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ExternalLink, Zap, ChevronDown, AlertCircle, Lightbulb, Target, Sparkles } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
+import { cn } from '@/lib/utils';
+import { CardTitle, BodyText, MutedText } from './ui/Typography';
 
 interface QuestionCardProps {
   problemTitle: string;
@@ -19,29 +21,36 @@ interface QuestionCardProps {
   onAILabClick?: () => void;
 }
 
-const getDifficultyColor = (difficulty: string) => {
+const getDifficultyStyles = (difficulty: string) => {
   switch (difficulty?.toLowerCase()) {
     case 'easy':
-      return 'bg-green-50 text-green-700 border-green-200';
+      return {
+        bg: 'bg-emerald-500/10',
+        text: 'text-emerald-600',
+        border: 'border-emerald-500/20',
+        badge: 'bg-emerald-500 text-white hover:bg-emerald-600',
+      };
     case 'medium':
-      return 'bg-yellow-50 text-yellow-700 border-yellow-200';
+      return {
+        bg: 'bg-amber-500/10',
+        text: 'text-amber-600',
+        border: 'border-amber-500/20',
+        badge: 'bg-amber-500 text-white hover:bg-amber-600',
+      };
     case 'hard':
-      return 'bg-red-50 text-red-700 border-red-200';
+      return {
+        bg: 'bg-rose-500/10',
+        text: 'text-rose-600',
+        border: 'border-rose-500/20',
+        badge: 'bg-rose-500 text-white hover:bg-rose-600',
+      };
     default:
-      return 'bg-gray-50 text-gray-700 border-gray-200';
-  }
-};
-
-const getDifficultyBadgeColor = (difficulty: string) => {
-  switch (difficulty?.toLowerCase()) {
-    case 'easy':
-      return 'bg-green-100 text-green-800 hover:bg-green-200';
-    case 'medium':
-      return 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200';
-    case 'hard':
-      return 'bg-red-100 text-red-800 hover:bg-red-200';
-    default:
-      return 'bg-gray-100 text-gray-800 hover:bg-gray-200';
+      return {
+        bg: 'bg-gray-500/10',
+        text: 'text-gray-600',
+        border: 'border-gray-500/20',
+        badge: 'bg-gray-500 text-white hover:bg-gray-600',
+      };
   }
 };
 
@@ -61,138 +70,182 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
 }) => {
   const [showHints, setShowHints] = useState(false);
   const [showApproach, setShowApproach] = useState(false);
+  const styles = getDifficultyStyles(difficulty);
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className={`p-5 rounded-lg border-2 transition-all hover:shadow-lg ${getDifficultyColor(difficulty)}`}
-    >
-      {/* Header with Title and Difficulty */}
-      <div className="flex items-start justify-between gap-3 mb-3">
-        <div className="flex-1 min-w-0">
-          <h4 className="font-semibold text-sm md:text-base truncate pr-2">
-            {problemTitle}
-          </h4>
-          {primaryConceptTested && (
-            <p className="text-xs mt-1 opacity-75">{primaryConceptTested}</p>
-          )}
-        </div>
-        <Badge className={`${getDifficultyBadgeColor(difficulty)} flex-shrink-0`}>
-          {difficulty}
-        </Badge>
-      </div>
-
-      {/* Recommendation Reason */}
-      {whyRecommended && (
-        <div className="mb-4 p-3 bg-white bg-opacity-50 rounded border-l-2 border-current">
-          <p className="text-xs md:text-sm leading-relaxed">
-            <span className="font-medium">💡 Why recommended: </span>
-            {whyRecommended}
-          </p>
-        </div>
+      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+      className={cn(
+        "group relative rounded-2xl border-2 bg-card p-6 transition-all duration-300 hover:shadow-premium hover:-translate-y-1",
+        styles.border
       )}
+    >
+      {/* Dynamic Background Glow */}
+      <div className={cn("absolute inset-0 opacity-[0.03] transition-opacity group-hover:opacity-[0.07] pointer-events-none rounded-2xl", styles.bg)} />
 
-      {/* Topic Tag */}
-      {topic && (
-        <div className="mb-4">
-          <Badge variant="outline" className="text-xs">
-            {topic}
+      <div className="relative z-10">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1.5">
+              <Badge variant="outline" className="text-[10px] uppercase tracking-wider font-bold py-0 h-5 border-border/50 bg-muted/30">
+                {topic}
+              </Badge>
+              {isDuplicate && (
+                <div className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                  <AlertCircle className="w-3 h-3" />
+                  RECENT
+                </div>
+              )}
+            </div>
+            <CardTitle className="text-base md:text-lg leading-tight group-hover:text-primary transition-colors">
+              {problemTitle}
+            </CardTitle>
+            {primaryConceptTested && (
+              <MutedText className="text-[11px] mt-1 font-semibold uppercase tracking-tight opacity-70">
+                Main Concept: {primaryConceptTested}
+              </MutedText>
+            )}
+          </div>
+          <Badge className={cn("shrink-0 shadow-sm px-3 py-1 text-xs font-bold rounded-lg", styles.badge)}>
+            {difficulty}
           </Badge>
         </div>
-      )}
 
-      {/* Duplicate Indicator */}
-      {isDuplicate && (
-        <div className="mb-4 p-3 bg-yellow-50 border-l-2 border-yellow-400 rounded flex items-start gap-2">
-          <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
-          <p className="text-xs text-yellow-700">This problem was recently recommended</p>
-        </div>
-      )}
-
-      {/* Hints Section */}
-      {hints && hints.length > 0 && (
-        <div className="mb-4">
-          <button
-            onClick={() => setShowHints(!showHints)}
-            className="w-full flex items-center justify-between p-3 bg-white bg-opacity-50 rounded border-l-2 border-current hover:bg-opacity-70 transition"
-          >
-            <span className="text-xs md:text-sm font-medium">💡 Hints ({hints.length})</span>
-            <ChevronDown className={`w-4 h-4 transition-transform ${showHints ? 'rotate-180' : ''}`} />
-          </button>
-          {showHints && (
-            <div className="mt-2 ml-3 space-y-2 pl-3 border-l-2 border-current">
-              {hints.map((hint, idx) => (
-                <p key={idx} className="text-xs md:text-sm text-muted-foreground">
-                  {idx + 1}. {hint}
-                </p>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Approach Guide Section */}
-      {approachGuide && (
-        <div className="mb-4">
-          <button
-            onClick={() => setShowApproach(!showApproach)}
-            className="w-full flex items-center justify-between p-3 bg-white bg-opacity-50 rounded border-l-2 border-current hover:bg-opacity-70 transition"
-          >
-            <span className="text-xs md:text-sm font-medium">🎯 Approach Guide</span>
-            <ChevronDown className={`w-4 h-4 transition-transform ${showApproach ? 'rotate-180' : ''}`} />
-          </button>
-          {showApproach && (
-            <div className="mt-2 ml-3 pl-3 border-l-2 border-current">
-              <p className="text-xs md:text-sm text-muted-foreground whitespace-pre-line">
-                {approachGuide}
+        {/* Why Recommended */}
+        {whyRecommended && (
+          <div className="mb-6 rounded-xl bg-muted/40 border border-border/50 p-4 transition-all hover:bg-muted/60">
+            <div className="flex gap-3">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Sparkles className="h-4 w-4" />
+              </div>
+              <p className="text-xs md:text-sm leading-relaxed text-foreground/80">
+                <span className="font-bold text-primary">AI Insight: </span>
+                {whyRecommended}
               </p>
             </div>
+          </div>
+        )}
+
+        <div className="space-y-3 mb-6">
+          {/* Hints Section */}
+          {hints && hints.length > 0 && (
+            <div>
+              <button
+                onClick={() => setShowHints(!showHints)}
+                className="flex w-full items-center justify-between rounded-xl bg-background border border-border/60 p-3 text-sm font-semibold text-foreground/90 transition-all hover:bg-muted/50"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="p-1 rounded bg-amber-500/10 text-amber-600">
+                    <Lightbulb className="w-4 h-4" />
+                  </div>
+                  <span>Strategic Hints</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">{hints.length}</span>
+                </div>
+                <ChevronDown className={cn("w-4 h-4 transition-transform duration-300", showHints && "rotate-180")} />
+              </button>
+              <AnimatePresence>
+                {showHints && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                    className="overflow-hidden"
+                  >
+                    <div className="mt-2 space-y-2 p-3 pl-10">
+                      {hints.map((hint, idx) => (
+                        <div key={idx} className="relative text-xs md:text-sm text-foreground/70 leading-relaxed group/hint">
+                          <span className="absolute left-[-24px] top-1 text-[10px] font-bold text-muted-foreground group-hover/hint:text-primary transition-colors">{idx + 1}</span>
+                          {hint}
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
+
+          {/* Approach Guide Section */}
+          {approachGuide && (
+            <div>
+              <button
+                onClick={() => setShowApproach(!showApproach)}
+                className="flex w-full items-center justify-between rounded-xl bg-background border border-border/60 p-3 text-sm font-semibold text-foreground/90 transition-all hover:bg-muted/50"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="p-1 rounded bg-indigo-500/10 text-indigo-600">
+                    <Target className="w-4 h-4" />
+                  </div>
+                  <span>Mastery Approach</span>
+                </div>
+                <ChevronDown className={cn("w-4 h-4 transition-transform duration-300", showApproach && "rotate-180")} />
+              </button>
+              <AnimatePresence>
+                {showApproach && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                    className="overflow-hidden"
+                  >
+                    <div className="mt-2 p-4 rounded-xl bg-indigo-500/[0.03] border border-indigo-500/10">
+                      <p className="text-xs md:text-sm text-foreground/70 whitespace-pre-line leading-relaxed italic">
+                        {approachGuide}
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           )}
         </div>
-      )}
 
-      {/* Learner Level */}
-      {learnerLevel && (
-        <div className="mb-4 text-xs text-muted-foreground bg-white bg-opacity-30 px-3 py-2 rounded">
-          <span className="font-medium">Your Level: </span>
-          <Badge variant="outline" className="ml-1 text-xs capitalize">{learnerLevel}</Badge>
+        {/* Footer Actions */}
+        <div className="flex items-center justify-between gap-4 pt-4 border-t border-border/40">
+          <div className="flex items-center gap-2">
+            {learnerLevel && (
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-muted/80 border border-border/50">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{learnerLevel} Level</span>
+              </div>
+            )}
+          </div>
+          
+          <div className="flex gap-2.5">
+            {sourceUrl && (
+              <Button
+                size="sm"
+                variant="outline"
+                asChild
+                className="rounded-xl h-9 px-4 border-border/60 hover:bg-muted transition-all active:scale-95"
+              >
+                <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="gap-2 flex items-center">
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span className="text-xs font-bold tracking-tight">{platform}</span>
+                </a>
+              </Button>
+            )}
+            
+            {onAILabClick && (
+              <Button
+                size="sm"
+                variant="default"
+                onClick={onAILabClick}
+                className="rounded-xl h-9 px-4 gap-2 shadow-glow hover:shadow-primary/40 transition-all active:scale-95 group/btn"
+              >
+                <Zap className="w-3.5 h-3.5 fill-current transition-transform group-hover:scale-110 group-hover:rotate-12" />
+                <span className="text-xs font-bold tracking-tight">Enter AI Lab</span>
+              </Button>
+            )}
+          </div>
         </div>
-      )}
-
-      {/* Action Buttons */}
-      <div className="flex gap-2 justify-end">
-        {onAILabClick && (
-          <Button
-            size="sm"
-            variant="default"
-            onClick={onAILabClick}
-            className="gap-2"
-          >
-            <Zap className="w-4 h-4" />
-            <span>AI Lab</span>
-          </Button>
-        )}
-        
-        {sourceUrl && (
-          <Button
-            size="sm"
-            variant="outline"
-            asChild
-          >
-            <a 
-              href={sourceUrl} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="gap-2 flex items-center"
-            >
-              <ExternalLink className="w-4 h-4" />
-              <span>{platform}</span>
-            </a>
-          </Button>
-        )}
       </div>
     </motion.div>
   );
 };
+

@@ -1,14 +1,16 @@
 /**
- * PracticeProblem Page
- * Phase 5 Frontend Integration
- * Combines all components: Monaco editor, hints, reviews, inline assist, explanations
- * Non-blocking architecture - ML never blocks the UI
+ * PracticeProblem Page - Redesigned
+ * Premium AI Code Lab Experience
  */
 
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Send, HelpCircle, RefreshCw, CheckCircle, AlertCircle, Loader } from 'lucide-react';
-import { useParams, useLocation } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  Send, HelpCircle, RefreshCw, CheckCircle, AlertCircle, 
+  Loader, Zap, Terminal, Code2, BookOpen, Sparkles, 
+  ChevronRight, Brain, Lightbulb, Play
+} from 'lucide-react';
+import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { usePracticeSession } from '@/hooks/usePracticeSession';
 import { MonacoEditor } from '@/components/MonacoEditor';
 import { InlineAssist } from '@/components/InlineAssist';
@@ -17,6 +19,9 @@ import { ExplanationModal } from '@/components/ExplanationModal';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import VoiceMentorOrb from '@/components/VoiceMentorOrb';
+import { PageTitle, SectionTitle, CardTitle, BodyText, MutedText, CodeText } from '@/components/ui/Typography';
+import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
 
@@ -40,6 +45,7 @@ interface ProblemData {
 
 export default function PracticeProblem() {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const { problemId } = useParams<{ problemId: string }>();
   const location = useLocation();
   const locationState = location.state as { problem?: ProblemData } | null;
@@ -62,7 +68,7 @@ export default function PracticeProblem() {
   const [loadingProblem, setLoadingProblem] = useState(true);
   const [code, setCode] = useState('');
   const [selectedLanguage, setSelectedLanguage] = useState<string>('python');
-  const [savedCode, setSavedCode] = useState<Record<string, string>>({}); // Store code per language
+  const [savedCode, setSavedCode] = useState<Record<string, string>>({}); 
   const [cursorLine, setCursorLine] = useState(0);
   const [hints, setHints] = useState<string[]>([]);
   const [hintLevel, setHintLevel] = useState(0);
@@ -74,13 +80,11 @@ export default function PracticeProblem() {
   const [running, setRunning] = useState(false);
   const [runResults, setRunResults] = useState<any>(null);
 
-  // Load problem from location state or fetch from API
+  // Load problem
   useEffect(() => {
     const loadProblem = async () => {
       try {
         setLoadingProblem(true);
-
-        // If problem data was passed via navigation state, use it
         if (locationState?.problem) {
           const selectedProblem = locationState.problem;
           const problemData: ProblemData = {
@@ -89,7 +93,7 @@ export default function PracticeProblem() {
             description: selectedProblem.description || selectedProblem.whyRecommended || 'Solve this problem',
             difficulty: (selectedProblem.difficulty?.toLowerCase() as any) || 'medium',
             initialCode: selectedProblem.initialCode || `# Solve the problem\n# Write your solution here`,
-            testCases: selectedProblem.testCases || [{ input: 'Sample input', output: 'Expected output' }],
+            testCases: selectedProblem.testCases || [],
             constraints: selectedProblem.constraints || [],
             topic: selectedProblem.topic || (selectedProblem as any).topicId,
             topicId: (selectedProblem as any).topicId || selectedProblem.topic,
@@ -100,12 +104,10 @@ export default function PracticeProblem() {
           setProblem(problemData);
           setCode(problemData.initialCode);
         } else {
-          // Fallback: try to fetch from API (for direct URL access)
           const token = localStorage.getItem('auth_token') || 'demo-token';
-          const response = await fetch(
-            `${API_BASE_URL}/practice/questions/${problemId}`,
-            { headers: { Authorization: `Bearer ${token}` } }
-          ).catch(() => null);
+          const response = await fetch(`${API_BASE_URL}/practice/questions/${problemId}`, { 
+            headers: { Authorization: `Bearer ${token}` } 
+          }).catch(() => null);
 
           if (response?.ok) {
             const result = await response.json();
@@ -124,17 +126,13 @@ export default function PracticeProblem() {
             setProblem(problemData);
             setCode(problemData.initialCode);
           } else {
-            // Final fallback: use a default problem
             const defaultProblem: ProblemData = {
               id: problemId || 'two-sum',
               title: 'Two Sum',
               description: 'Given an array of integers nums and an integer target, return the indices of the two numbers that add up to target.',
               difficulty: 'easy',
               initialCode: 'def twoSum(nums: list[int], target: int) -> list[int]:\n    pass',
-              testCases: [
-                { input: 'nums = [2,7,11,15], target = 9', output: '[0,1]' },
-                { input: 'nums = [3,2,4], target = 6', output: '[1,2]' },
-              ],
+              testCases: [{ input: 'nums = [2,7,11,15], target = 9', output: '[0,1]' }],
               constraints: ['2 <= nums.length <= 104', '-109 <= nums[i] <= 109'],
             };
             setProblem(defaultProblem);
@@ -142,658 +140,468 @@ export default function PracticeProblem() {
           }
         }
       } catch (err) {
-        toast({
-          title: 'Error',
-          description: 'Failed to load problem',
-        });
-        // Set a default problem as fallback
-        const defaultProblem: ProblemData = {
-          id: problemId || 'error',
-          title: 'Problem Not Found',
-          description: 'Could not load the selected problem. Please try again.',
-          difficulty: 'hard',
-          initialCode: `# Error loading problem`,
-          testCases: [],
-          constraints: [],
-        };
-        setProblem(defaultProblem);
+        toast({ title: 'Error', description: 'Failed to load problem' });
       } finally {
         setLoadingProblem(false);
       }
     };
-
     loadProblem();
   }, [problemId, locationState, toast]);
 
-  // Initialize session on mount
+  // Initialize session
   useEffect(() => {
     if (!session && problem) {
       const language = problem.language || 'python';
       setSelectedLanguage(language);
-      
-      // ✅ FIXED: Extract correct fields from problem object
-      // problem.problemId = unique slug (e.g., "two-sum")
-      // problem.topic or problem.topicId = topic for learning path
-      const problemId = (problem as any).problemId || problem.id; // Use problemId if available, fallback to id
-      const topicId = (problem as any).topic || (problem as any).topicId || 'general'; // Use topic if available
-      
-      createSession(topicId, problemId, language).catch(() => {
+      createSession((problem as any).topic || (problem as any).topicId || 'general', (problem as any).problemId || problem.id, language).catch(() => {
         toast({ title: 'Error', description: 'Failed to create session' });
       });
     }
   }, [problem]);
 
-  // ✅ PHASE 5: Load starterCode from session (REQUIRED - No fallback)
+  // Load starter code from session
   useEffect(() => {
-    if (!session) return; // Wait for session to be created
-    
+    if (!session) return;
     const sessionData = session as any;
-    
-    // 🔥 ENFORCE: Must be schemaVersion 2
-    if (sessionData.schemaVersion !== 2) {
-      console.error(`❌ HARD FAIL: Session is not wrapped execution (schemaVersion: ${sessionData.schemaVersion})`);
-      toast({
-        title: 'Error',
-        description: 'Session must use wrapped execution (schemaVersion 2)',
-      });
-      return;
+    if (sessionData.schemaVersion === 2 && sessionData.starterCode?.[selectedLanguage]) {
+      const starter = sessionData.starterCode[selectedLanguage];
+      setCode(starter);
+      setSavedCode(prev => ({...prev, [selectedLanguage]: starter}));
     }
-
-    // 🔥 ENFORCE: Must have wrapperTemplate
-    if (!sessionData.wrapperTemplate) {
-      console.error(`❌ HARD FAIL: Session missing wrapperTemplate`);
-      toast({
-        title: 'Error',
-        description: 'Session missing wrapper template',
-      });
-      return;
-    }
-
-    // 🔥 ENFORCE: Must have testCases
-    if (!Array.isArray(sessionData.testCases) || sessionData.testCases.length === 0) {
-      console.error(`❌ HARD FAIL: Session has no test cases`);
-      toast({
-        title: 'Error',
-        description: 'Session must have test cases',
-      });
-      return;
-    }
-
-    console.log(`📊 Session loaded (wrapped v2):`, {
-      sessionId: sessionData.sessionId,
-      schemaVersion: sessionData.schemaVersion,
-      testCasesCount: sessionData.testCases?.length || 0,
-      starterCodeLanguages: Object.keys(sessionData.starterCode || {}),
-      wrapperTemplate: !!sessionData.wrapperTemplate,
-    });
-
-    // 🔥 ENFORCE: Load starter code from session ONLY
-    const starter = sessionData.starterCode?.[selectedLanguage];
-    if (!starter) {
-      console.error(`❌ HARD FAIL: Session missing starterCode for ${selectedLanguage}`);
-      toast({
-        title: 'Error',
-        description: `No starter code for ${selectedLanguage}`,
-      });
-      return;
-    }
-
-    setCode(starter);
-    setSavedCode(prev => ({...prev, [selectedLanguage]: starter}));
-    console.log(`✅ Loaded starter code for ${selectedLanguage} from session`);
   }, [session, selectedLanguage]);
 
-  // ✅ Handle language switching with code preservation
   const handleLanguageChange = (newLanguage: string) => {
-    // Save current code
     setSavedCode(prev => ({...prev, [selectedLanguage]: code}));
-    
-    // Load saved or starter code for new language
-    const newCode = savedCode[newLanguage] || 
-                   ((session as any)?.starterCode?.[newLanguage]) ||
-                   problem?.initialCode ||
-                   `# Write your solution here`;
-    
+    const newCode = savedCode[newLanguage] || ((session as any)?.starterCode?.[newLanguage]) || problem?.initialCode || `# Write your solution here`;
     setCode(newCode);
     setSelectedLanguage(newLanguage);
-    console.log(`🔄 Switched to ${newLanguage}`);
   };
 
-  // Request hint (non-blocking streaming)
   const handleGetHint = async () => {
     if (!session?.sessionId) return;
-
     try {
       setGettingHint(true);
       setHintText("");
-      
       const token = localStorage.getItem('auth_token') || 'demo-token';
-      const response = await fetch(
-        `${API_BASE_URL}/practice/hint/${session.sessionId}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            currentCode: code,
-            language: selectedLanguage,
-            hintLevel: hintLevel + 1
-          })
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || errorData.error || "Failed to get hint");
-      }
-
-      if (!response.body) {
-        throw new Error("No streaming body received");
-      }
-
-      const reader = response.body.getReader();
+      const response = await fetch(`${API_BASE_URL}/practice/hint/${session.sessionId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ currentCode: code, language: selectedLanguage, hintLevel: hintLevel + 1 })
+      });
+      if (!response.ok) throw new Error("Failed to get hint");
+      const reader = response.body!.getReader();
       const decoder = new TextDecoder("utf-8");
-
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
-
-        const chunk = decoder.decode(value, { stream: true });
-        setHintText(prev => prev + chunk);
+        setHintText(prev => prev + decoder.decode(value, { stream: true }));
       }
-
       setHintLevel((prev) => Math.min(prev + 1, 5));
     } catch (err) {
-      toast({
-        title: 'Hint Error',
-        description: err instanceof Error ? err.message : 'Failed to get hint',
-      });
+      toast({ title: 'Hint Error', description: 'Failed to get hint' });
     } finally {
       setGettingHint(false);
     }
   };
 
-  // Submit code (non-blocking)
-  const handleSubmit = async () => {
-    if (!code.trim()) {
-      toast({ title: 'Error', description: 'Please enter code' });
-      return;
-    }
+  const handleInlineAssist = (codeStr: string, line: number) => {
+    setCursorLine(line);
+    setShowInlineAssist(true);
+    // Optionally we could auto-trigger something here
+  };
 
+  const handleSubmit = async () => {
+    if (!code.trim()) return;
     try {
       const result = await submitCode(code);
-
       if (result.verdict === 'accepted') {
-        toast({
-          title: 'Accepted! ✅',
-          description: `Passed all ${result.totalTests} tests in ${result.executionTime}s`,
-        });
-
-        // Show explanation modal after success
+        toast({ title: 'Accepted! ✅', description: `Passed all ${result.totalTests} tests` });
         setTimeout(() => setShowExplanation(true), 500);
       } else {
-        toast({
-          title: 'Not Accepted',
-          description: `${result.passedTests}/${result.totalTests} tests passed`,
-        });
+        toast({ title: 'Not Accepted', description: `${result.passedTests}/${result.totalTests} tests passed` });
       }
     } catch (err) {
-      toast({
-        title: 'Submission Error',
-        description: err instanceof Error ? err.message : 'Failed to submit',
-      });
+      toast({ title: 'Submission Error', description: 'Failed to submit' });
     }
   };
 
-  // Run code against test cases (🔥 ENFORCE: session.testCases ONLY)
   const handleRun = async () => {
-    if (!code.trim()) {
-      toast({ title: 'Error', description: 'Please enter code' });
-      return;
-    }
-
-    // 🔥 ENFORCE: Must have session.testCases
     const testCasesToUse = (session as any)?.testCases;
-    if (!testCasesToUse || !Array.isArray(testCasesToUse) || testCasesToUse.length === 0) {
-      toast({
-        title: 'Error',
-        description: 'Session missing test cases. Cannot run without wrapped test cases.',
-      });
-      return;
-    }
-
+    if (!code.trim() || !testCasesToUse?.length) return;
     try {
       setRunning(true);
       setRunResults(null);
-
       const result = await runCode(code, testCasesToUse);
-
       setRunResults(result);
-
       if (result.verdict === 'accepted') {
-        toast({
-          title: '✅ Test Passed!',
-          description: `All ${result.totalTests} test cases passed in ${result.executionTimeMs || result.executionTime}ms`,
-        });
+        toast({ title: '✅ Test Passed!', description: 'All test cases passed' });
       } else {
-        toast({
-          title: '⚠️ Test Failed',
-          description: `${result.passedTests}/${result.totalTests} tests passed`,
-        });
+        toast({ title: '⚠️ Test Failed', description: `${result.passedTests}/${result.totalTests} tests passed` });
       }
     } catch (err) {
-      toast({
-        title: 'Run Error',
-        description: err instanceof Error ? err.message : 'Failed to run code',
-      });
+      toast({ title: 'Run Error', description: 'Failed to run code' });
     } finally {
       setRunning(false);
     }
   };
 
-  // Handle inline assist
-  const handleInlineAssist = async (codeSnippet: string, line: number) => {
-    setCursorLine(line);
-    setShowInlineAssist(true);
-  };
-
-  // Show loading state
   if (loadingProblem) {
     return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="flex items-center justify-center min-h-screen"
-      >
-        <div className="text-center">
-          <Loader className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-lg text-muted-foreground">Loading problem...</p>
-        </div>
-      </motion.div>
+      <div className="flex flex-col items-center justify-center h-[80vh] gap-4">
+        <div className="h-12 w-12 animate-spin rounded-full border-[3px] border-primary border-t-transparent shadow-glow" />
+        <MutedText className="animate-pulse">Loading AI Lab Workspace...</MutedText>
+      </div>
     );
   }
 
-  // Show error if problem failed to load
-  if (!problem) {
-    return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="space-y-6"
-      >
-        <div className="glass-card p-6 border-destructive/30 bg-destructive/5">
-          <div className="flex items-center gap-3 mb-3">
-            <AlertCircle className="h-5 w-5 text-destructive" />
-            <h2 className="text-lg font-semibold text-destructive">Problem Not Found</h2>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            The selected problem could not be loaded. Please try selecting another problem from the Practice section.
-          </p>
-        </div>
-      </motion.div>
-    );
-  }
+  const styles = {
+    easy: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
+    medium: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
+    hard: 'bg-rose-500/10 text-rose-500 border-rose-500/20',
+  }[problem!.difficulty] || 'bg-muted text-muted-foreground';
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="space-y-6"
-    >
-      {/* Problem Header */}
-      <div className="glass-card p-6">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-foreground">
-                {typeof problem.title === 'string' ? problem.title : JSON.stringify(problem.title)}
-              </h1>
-              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                problem.difficulty === 'easy'
-                  ? 'bg-success/10 text-success'
-                  : problem.difficulty === 'medium'
-                  ? 'bg-warning/10 text-warning'
-                  : 'bg-destructive/10 text-destructive'
-              }`}>
-                {problem.difficulty.charAt(0).toUpperCase() + problem.difficulty.slice(1)}
-              </span>
-            </div>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {typeof problem.description === 'string' ? problem.description : JSON.stringify(problem.description)}
-            </p>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 pb-20">
+      {/* Header Info */}
+      <div className="flex flex-col lg:flex-row gap-6 items-start justify-between">
+        <div className="flex-1 space-y-3">
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => navigate('/practice')} 
+              className="group flex items-center gap-1.5 text-[10px] font-bold text-primary hover:text-primary/80 transition-colors uppercase tracking-widest"
+            >
+              <ChevronRight className="h-3 w-3 rotate-180 transition-transform group-hover:-translate-x-0.5" />
+              PRACTICE ROOM
+            </button>
+            <div className="h-1 w-1 rounded-full bg-border" />
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+              ID: {problem!.id}
+            </span>
+            {problem!.topic && (
+              <>
+                <div className="h-1 w-1 rounded-full bg-border" />
+                <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">
+                  CONCEPT: {problem!.topic}
+                </span>
+              </>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-4">
+            <PageTitle className="text-2xl md:text-3xl lg:text-4xl">{problem!.title}</PageTitle>
+            <Badge className={cn("px-4 py-1.5 font-bold text-[10px] uppercase border shadow-md transition-all hover:scale-105 cursor-default", styles)}>
+              {problem!.difficulty}
+            </Badge>
+          </div>
+          <BodyText className="max-w-4xl text-foreground/70 leading-relaxed font-medium text-sm md:text-base">
+            {problem!.description}
+          </BodyText>
+        </div>
 
-            {/* Constraints & Test Cases */}
-            <div className="mt-4 grid grid-cols-2 gap-4">
-              {problem.constraints && Array.isArray(problem.constraints) && problem.constraints.length > 0 && (
-                <div>
-                  <h4 className="text-xs font-semibold text-foreground mb-2">Constraints:</h4>
-                  <ul className="space-y-1">
-                    {problem.constraints.map((c, i) => {
-                      const constraintStr = typeof c === 'string' ? c : JSON.stringify(c);
-                      return (
-                        <li key={i} className="text-xs text-muted-foreground">• {constraintStr}</li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              )}
-              {/* 🔥 ENFORCE: Test cases from session ONLY (no fallback to problem) */}
-              {((session as any)?.testCases && (session as any).testCases.length > 0) ? (
-                <div>
-                  <h4 className="text-xs font-semibold text-foreground mb-2">
-                    Test Cases: {(session as any).testCases.length}
-                  </h4>
-                  <ul className="space-y-1">
-                    {(session as any).testCases.map((tc: any, i: number) => {
-                      // Wrapped format: {input: {...}, expectedOutput: {...}}
-                      const inputStr = typeof tc.input === 'string' ? tc.input : JSON.stringify(tc.input);
-                      const outputStr = typeof tc.expectedOutput === 'string' ? tc.expectedOutput : JSON.stringify(tc.expectedOutput);
-                      return (
-                        <li key={i} className="text-xs text-muted-foreground">
-                          • Input: {inputStr.substring(0, 40)} | Expected: {outputStr.substring(0, 40)}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              ) : (
-                <div>
-                  <h4 className="text-xs font-semibold text-foreground mb-2">Test Cases:</h4>
-                  <p className="text-xs text-destructive">❌ No test cases loaded from session</p>
-                </div>
-              )}
+        <motion.div 
+          whileHover={{ y: -2 }}
+          className="flex items-center gap-4 bg-card/40 hover:bg-card/60 p-4 rounded-2xl border border-border/50 backdrop-blur-xl self-stretch lg:self-auto shadow-premium transition-all group"
+        >
+          <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all shadow-inner">
+            <Brain className="h-6 w-6" />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-tighter">Cognitive Sync</span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-foreground">Active Analysis</span>
+              <div className="flex gap-0.5">
+                {[1, 2, 3].map(i => (
+                  <motion.div 
+                    key={i}
+                    animate={{ height: [4, 12, 4] }}
+                    transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
+                    className="w-1 bg-primary rounded-full"
+                  />
+                ))}
+              </div>
             </div>
           </div>
-
-          {/* Session Status */}
-          {session && (
-            <div className="ml-4 space-y-2">
-              <div className="text-xs text-muted-foreground">
-                Session: <span className="font-mono">
-                  {typeof session.sessionId === 'string' ? session.sessionId.slice(0, 8) : String(session.sessionId).slice(0, 8)}...
-                </span>
-              </div>
-              {session.verdict && (
-                <div className="flex items-center gap-2">
-                  {session.verdict === 'accepted' ? (
-                    <CheckCircle className="h-4 w-4 text-success" />
-                  ) : (
-                    <AlertCircle className="h-4 w-4 text-warning" />
-                  )}
-                  <span className="text-xs font-medium">
-                    {typeof session.verdict === 'string' ? session.verdict : JSON.stringify(session.verdict)}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        </motion.div>
       </div>
 
-      {/* Editor Section */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Monaco Editor */}
-        <div className="lg:col-span-2">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-foreground">Solution</h2>
-              {/* Language Selector */}
-              <select
-                value={selectedLanguage}
-                onChange={(e) => handleLanguageChange(e.target.value)}
-                className="text-sm px-3 py-1 border rounded bg-background"
-              >
-                <option value="python">Python</option>
-                <option value="javascript">JavaScript</option>
-                <option value="java">Java</option>
-                <option value="cpp">C++</option>
-                <option value="go">Go</option>
-              </select>
-            </div>
-            <MonacoEditor
-              key={selectedLanguage}
-              defaultValue={code || problem?.initialCode}
-              language={selectedLanguage}
-              onChange={setCode}
-              onInlineAssist={handleInlineAssist}
-              loading={sessionLoading}
-              height="500px"
-            />
-          </div>
-
-          {/* Verdict Display */}
-          {session?.verdict && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`mt-4 p-4 rounded-lg border ${
-                session.verdict === 'accepted'
-                  ? 'bg-success/5 border-success/20'
-                  : 'bg-warning/5 border-warning/20'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-foreground">
-                    {session.verdict === 'accepted' ? '✅ Accepted!' : '⚠️ ' + session.verdict}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {session.passedTests}/{session.totalTests} tests passed • {session.executionTime}s
-                  </p>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+        {/* Left: Problem Details & Sidebar */}
+        <div className="lg:col-span-1 space-y-6">
+          {/* Constraints Card */}
+          {problem!.constraints && problem!.constraints.length > 0 && (
+            <div className="glass-card p-5 border-l-4 border-l-primary/40 bg-card shadow-soft">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="p-1 rounded bg-primary/10 text-primary">
+                  <Terminal className="w-3.5 h-3.5" />
                 </div>
-                {session.mlJobIds && (
-                  <div className="text-xs text-muted-foreground">
-                    <p>ML jobs running...</p>
-                  </div>
-                )}
+                <CardTitle className="text-xs uppercase tracking-widest opacity-70">Constraints</CardTitle>
               </div>
-            </motion.div>
+              <ul className="space-y-2.5">
+                {(Array.isArray(problem!.constraints) ? problem!.constraints : typeof problem!.constraints === 'string' ? (problem!.constraints as string).split('\n') : []).map((c, i) => (
+                  <li key={i} className="text-xs text-foreground/80 font-mono leading-tight flex items-start gap-2">
+                    <span className="text-primary font-bold">»</span>
+                    {c as any}
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
 
-          {/* Submit & Action Buttons */}
-          <div className="mt-4 flex gap-2">
-            <Button
-              onClick={handleRun}
-              disabled={running || sessionLoading}
-              variant="secondary"
-              className="flex items-center gap-2 justify-center"
-            >
-              <Loader className={`h-4 w-4 ${running ? 'animate-spin' : ''}`} />
-              {running ? 'Running...' : 'Run Tests'}
-            </Button>
+          {/* Test Cases Preview */}
+          <div className="glass-card p-5 bg-card shadow-soft overflow-hidden border border-border/40">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-500">
+                  <Play className="w-4 h-4" />
+                </div>
+                <CardTitle className="text-[10px] uppercase tracking-widest opacity-70">Sanity Checks</CardTitle>
+              </div>
+              <Badge variant="outline" className="text-[9px] font-bold px-1.5">
+                {(session as any)?.testCases?.length || 0} TOTAL
+              </Badge>
+            </div>
+            <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+              {((session as any)?.testCases || []).map((tc: any, i: number) => (
+                <div key={i} className="p-3 rounded-xl bg-muted/30 border border-border/40 space-y-2 group hover:bg-muted/50 transition-all border-l-2 border-l-transparent hover:border-l-indigo-500">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[9px] font-bold text-muted-foreground uppercase opacity-60 flex items-center gap-1">
+                      <ChevronRight className="h-2 w-2" /> Input
+                    </span>
+                    <CodeText className="text-[10px] truncate block bg-black/5 dark:bg-black/20 border-none">
+                      {typeof tc.input === 'object' ? JSON.stringify(tc.input) : tc.input}
+                    </CodeText>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[9px] font-bold text-emerald-500/70 uppercase flex items-center gap-1">
+                      <ChevronRight className="h-2 w-2" /> Expected
+                    </span>
+                    <CodeText className="text-[10px] truncate block bg-emerald-500/5 border-none text-emerald-600 dark:text-emerald-400">
+                      {typeof tc.expectedOutput === 'object' ? JSON.stringify(tc.expectedOutput) : tc.expectedOutput}
+                    </CodeText>
+                  </div>
+                </div>
+              ))}
+              {(!(session as any)?.testCases?.length) && (
+                <div className="flex flex-col items-center justify-center py-8 opacity-40">
+                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent mb-2" />
+                  <MutedText className="text-[10px] italic text-center">Synthesizing test harnesses...</MutedText>
+                </div>
+              )}
+            </div>
+          </div>
 
-            <Button
-              onClick={handleSubmit}
-              disabled={submitting || sessionLoading}
-              className="flex-1 flex items-center gap-2 justify-center"
-            >
-              <Send className="h-4 w-4" />
-              {submitting ? 'Submitting...' : 'Submit Code'}
-            </Button>
-
+          {/* AI Hints Sidebar */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <CardTitle className="text-[10px] uppercase tracking-widest opacity-60">Adaptive Assistance</CardTitle>
+              <Badge variant="outline" className="text-[9px] bg-muted/20 border-border/40">{hintLevel}/5</Badge>
+            </div>
+            
+            <div className="glass-card p-4 space-y-4 max-h-[400px] overflow-y-auto bg-primary/[0.01] border-primary/10">
+              <AnimatePresence mode="popLayout">
+                {!hintText && hints.length === 0 ? (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-10 opacity-40 text-center">
+                    <Lightbulb className="h-10 w-10 mb-2" />
+                    <p className="text-[10px] font-bold uppercase tracking-widest">Logic Decoupled</p>
+                    <p className="text-[10px] mt-1">Unlock hints for strategic direction.</p>
+                  </motion.div>
+                ) : (
+                  <div className="space-y-4">
+                    {hints.map((hint, i) => (
+                      <motion.div
+                        key={i}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="rounded-xl border border-border/60 bg-background p-3 text-xs shadow-soft"
+                      >
+                        <div className="flex items-center gap-1.5 mb-1.5 opacity-60">
+                          <Brain className="h-3 w-3" />
+                          <span className="text-[9px] font-bold uppercase tracking-widest">STRATEGY LAYER {i + 1}</span>
+                        </div>
+                        <p className="text-foreground/80 leading-relaxed font-medium">{hint}</p>
+                      </motion.div>
+                    ))}
+                    {hintText && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="rounded-2xl bg-primary/[0.03] p-4 text-xs text-foreground border border-primary/20 shadow-glow"
+                      >
+                        <div className="font-bold text-primary mb-2 flex items-center gap-2 text-[10px] uppercase tracking-widest">
+                          <Sparkles className="h-3 w-3" />
+                          Live Feedback • Level {hintLevel}
+                        </div>
+                        <div className="prose prose-invert prose-xs whitespace-pre-wrap leading-relaxed italic text-foreground/90 font-medium">
+                          {hintText}
+                        </div>
+                        {gettingHint && (
+                          <span className="inline-block w-1.5 h-3 ml-1 bg-primary animate-pulse align-middle" />
+                        )}
+                      </motion.div>
+                    )}
+                  </div>
+                )}
+              </AnimatePresence>
+            </div>
             <Button
               variant="outline"
               onClick={handleGetHint}
               disabled={gettingHint || hintLevel >= 5}
-              className="flex items-center gap-2"
+              className="w-full rounded-xl border-dashed border-primary/30 text-primary font-bold text-xs h-12 hover:bg-primary/5 transition-all shadow-soft"
             >
-              <HelpCircle className="h-4 w-4" />
-              Hint {hintLevel > 0 && `(${hintLevel}/5)`}
+              {gettingHint ? <Loader className="w-4 h-4 animate-spin mr-2" /> : <HelpCircle className="w-4 h-4 mr-2" />}
+              {hintLevel === 0 ? "REQUEST STRATEGY" : `ESCALATE HINT (${hintLevel}/5)`}
             </Button>
-
-            <Button
-              variant="outline"
-              onClick={() => setShowCodeReview(!showCodeReview)}
-              size="sm"
-            >
-              Review
-            </Button>
-
-            <Button
-              variant="outline"
-              onClick={() => setShowExplanation(true)}
-              size="sm"
-            >
-              Explain
-            </Button>
-
-            {submitting && (
-              <Button
-                variant="outline"
-                onClick={cancel}
-                size="sm"
-              >
-                <RefreshCw className="h-4 w-4" />
-              </Button>
-            )}
           </div>
-
-          {/* Run Results Display */}
-          {runResults && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`mt-4 p-4 rounded-lg border ${
-                runResults.verdict === 'accepted'
-                  ? 'bg-success/5 border-success/20'
-                  : 'bg-warning/5 border-warning/20'
-              }`}
-            >
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-foreground">Run Results</h3>
-                  {runResults.verdict === 'accepted' ? (
-                    <CheckCircle className="h-5 w-5 text-success" />
-                  ) : (
-                    <AlertCircle className="h-5 w-5 text-warning" />
-                  )}
-                </div>
-
-                <div className="grid grid-cols-3 gap-2 text-xs">
-                  <div>
-                    <div className="text-muted-foreground">Verdict</div>
-                    <div className="font-semibold text-foreground">
-                      {runResults.verdict.replace(/_/g, ' ')}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-muted-foreground">Passed</div>
-                    <div className="font-semibold text-foreground">
-                      {runResults.passedTests}/{runResults.totalTests}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-muted-foreground">Time</div>
-                    <div className="font-semibold text-foreground">
-                      {runResults.maxExecutionTime?.toFixed(3)}s
-                    </div>
-                  </div>
-                </div>
-
-                {runResults.testResults && runResults.testResults.length > 0 && (
-                  <div className="space-y-2 mt-3">
-                    <div className="text-xs font-semibold text-muted-foreground">
-                      Test Details
-                    </div>
-                    {runResults.testResults.map((test: any, idx: number) => {
-                      const statusStr = typeof test.statusDescription === 'string' 
-                        ? test.statusDescription 
-                        : JSON.stringify(test.statusDescription);
-                      const stderrStr = typeof test.stderr === 'string'
-                        ? test.stderr
-                        : JSON.stringify(test.stderr);
-                      return (
-                        <div
-                          key={idx}
-                          className="text-xs p-2 rounded bg-muted/50 border border-border"
-                        >
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-mono">Test {test.testIndex}</span>
-                            <span className="text-muted-foreground">
-                              {statusStr}
-                            </span>
-                          </div>
-                          {test.stderr && (
-                            <div className="text-destructive mt-1">
-                              Error: {stderrStr.substring(0, 100)}...
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          )}
         </div>
 
-        {/* Right Sidebar - Hints */}
-        <div className="space-y-2">
-          <h2 className="text-sm font-semibold text-foreground">💡 Hints</h2>
-          <div className="glass-card p-4 space-y-4 max-h-96 overflow-y-auto">
-            {!hintText && hints.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                Stuck? Click "Hint" for progressive guidance
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {hints.map((hint, i) => {
-                  const hintStr = typeof hint === 'string' ? hint : JSON.stringify(hint);
-                  return (
-                    <motion.div
-                      key={i}
-                      initial={{ opacity: 0, x: 10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      className="rounded bg-muted p-3 text-xs text-foreground border border-border"
+        {/* Right: Code Editor & Execution */}
+        <div className="lg:col-span-3 space-y-4 h-full flex flex-col">
+          <div className="glass-card flex-1 flex flex-col bg-card border-border/60 shadow-premium overflow-hidden min-h-[600px] rounded-2xl">
+            {/* Editor Toolbar */}
+            <div className="flex items-center justify-between p-3 border-b border-border bg-muted/20">
+              <div className="flex items-center gap-3">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-500 shadow-inner">
+                  <Code2 className="h-4 w-4" />
+                </div>
+                <h2 className="text-xs font-bold text-foreground uppercase tracking-widest opacity-70">Workspace Engine</h2>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center bg-background rounded-lg border border-border p-1">
+                  {['python', 'javascript', 'java', 'cpp'].map((lang) => (
+                    <button
+                      key={lang}
+                      onClick={() => handleLanguageChange(lang)}
+                      className={cn(
+                        "px-3 py-1 text-[10px] font-bold uppercase transition-all rounded-md",
+                        selectedLanguage === lang ? "bg-primary text-white shadow-soft" : "text-muted-foreground hover:text-foreground"
+                      )}
                     >
-                      <div className="font-medium mb-1">Level {i + 1}:</div>
-                      <p>{hintStr}</p>
-                    </motion.div>
-                  );
-                })}
-                {hintText && (
+                      {lang === 'cpp' ? 'C++' : lang}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Monaco Container */}
+            <div className="flex-1 relative border-b border-border">
+              <MonacoEditor
+                key={selectedLanguage}
+                defaultValue={code || problem?.initialCode}
+                language={selectedLanguage}
+                onChange={setCode}
+                onInlineAssist={handleInlineAssist}
+                loading={sessionLoading}
+                height="100%"
+              />
+              
+              {/* Optional Inline Assist Overlay */}
+              <AnimatePresence>
+                {showInlineAssist && (
+                  <div className="absolute inset-x-0 bottom-0 z-20">
+                    <InlineAssist
+                      code={code}
+                      cursorLine={cursorLine}
+                      isOpen={showInlineAssist}
+                      onClose={() => setShowInlineAssist(false)}
+                      onAccept={(suggestion) => {
+                        setCode((prev) => prev + '\n' + suggestion);
+                        setShowInlineAssist(false);
+                      }}
+                    />
+                  </div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Execution Console */}
+            <div className="bg-muted/10 p-4">
+              <AnimatePresence>
+                {runResults && (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="rounded bg-primary/5 p-4 text-xs text-foreground border border-primary/20"
+                    exit={{ opacity: 0, y: 10 }}
+                    className={cn(
+                      "mb-4 p-4 rounded-xl border-2 transition-all shadow-soft",
+                      runResults.verdict === 'accepted' ? "bg-emerald-500/5 border-emerald-500/20" : "bg-rose-500/5 border-rose-500/20"
+                    )}
                   >
-                    <div className="font-medium text-primary mb-2 flex items-center gap-2">
-                      <HelpCircle className="h-3 w-3" />
-                      Current Hint (Level {hintLevel}):
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        {runResults.verdict === 'accepted' ? <CheckCircle className="h-5 w-5 text-emerald-500" /> : <AlertCircle className="h-5 w-5 text-rose-500" />}
+                        <span className="text-sm font-bold uppercase tracking-tight text-foreground">
+                          {runResults.verdict === 'accepted' ? 'Success' : 'Process Terminated'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase">Harness Tests</p>
+                          <p className="text-xs font-bold text-foreground">{runResults.passedTests}/{runResults.totalTests}</p>
+                        </div>
+                        <div className="h-8 w-px bg-border/50" />
+                        <div className="text-right">
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase">Cycle Time</p>
+                          <p className="text-xs font-bold text-foreground">{runResults.maxExecutionTime?.toFixed(3) || runResults.executionTime}s</p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="prose prose-invert prose-xs whitespace-pre-wrap">
-                      {hintText}
-                    </div>
-                    {gettingHint && (
-                      <span className="inline-block w-2 h-4 ml-1 bg-primary animate-pulse" />
+                    {runResults.testResults?.[0]?.stderr && (
+                      <div className="mt-3 p-3 rounded-lg bg-black/40 border border-white/5 font-mono text-[10px] text-rose-300 overflow-x-auto whitespace-pre">
+                        {runResults.testResults[0].stderr}
+                      </div>
                     )}
                   </motion.div>
                 )}
-              </div>
-            )}
-          </div>
+              </AnimatePresence>
 
-          {/* Info Box */}
-          <div className="text-xs text-muted-foreground bg-muted/30 p-3 rounded border border-border">
-            <p className="font-medium mb-1">⚡ Non-blocking</p>
-            <p>All suggestions run async. Keep coding!</p>
+              {/* Action Bar */}
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={handleRun}
+                  disabled={running || sessionLoading}
+                  className="rounded-xl border-border bg-background h-12 px-6 font-bold text-xs tracking-widest shadow-soft hover:shadow-premium transition-all active:scale-95 group"
+                >
+                  {running ? <Loader className="w-4 h-4 animate-spin mr-2" /> : <Play className="w-4 h-4 mr-2 group-hover:fill-current" />}
+                  DRY RUN
+                </Button>
+
+                <Button
+                  size="lg"
+                  onClick={handleSubmit}
+                  disabled={submitting || sessionLoading}
+                  className="flex-1 rounded-xl bg-primary h-12 font-bold text-xs tracking-widest shadow-glow hover:shadow-primary/40 transition-all active:scale-95 group"
+                >
+                  {submitting ? <Loader className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2 transition-transform group-hover:translate-x-1 group-hover:-translate-y-1" />}
+                  EXECUTE & EVALUATE
+                </Button>
+
+                <div className="h-12 w-px bg-border/50 mx-1" />
+
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowCodeReview(!showCodeReview)}
+                  className={cn("h-12 w-12 rounded-xl transition-all", showCodeReview ? "bg-primary/10 text-primary" : "hover:bg-muted")}
+                >
+                  <RefreshCw className={cn("h-5 w-5", submitting && "animate-spin")} />
+                </Button>
+                
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowExplanation(true)}
+                  className="h-12 w-12 rounded-xl hover:bg-indigo-500/10 hover:text-indigo-500"
+                >
+                  <BookOpen className="h-5 w-5" />
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-
-      {/* Panels */}
-      <InlineAssist
-        code={code}
-        cursorLine={cursorLine}
-        isOpen={showInlineAssist}
-        onClose={() => setShowInlineAssist(false)}
-        onAccept={(suggestion) => {
-          setCode((prev) => prev + '\n' + suggestion);
-        }}
-      />
 
       <CodeReviewPanel
         code={code}
@@ -805,26 +613,18 @@ export default function PracticeProblem() {
         code={code}
         isOpen={showExplanation}
         onClose={() => setShowExplanation(false)}
-        onSubmit={(explanation, voiceTranscript) => {
-          toast({
-            title: 'Explanation Submitted ✅',
-            description: 'Your explanation has been scored and recorded',
-          });
+        onSubmit={() => {
+          toast({ title: 'Explanation Submitted ✅', description: 'Mastery metrics updated' });
         }}
       />
 
-      {/* Error State */}
       {sessionError && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="glass-card p-4 bg-destructive/5 border border-destructive/20"
-        >
-          <p className="text-sm text-destructive">
-            {typeof sessionError === 'string' ? sessionError : JSON.stringify(sessionError)}
-          </p>
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center gap-3 text-rose-500">
+          <AlertCircle className="h-5 w-5 shrink-0" />
+          <p className="text-xs font-bold uppercase tracking-tight">{typeof sessionError === 'string' ? sessionError : "Logic Engine Failure"}</p>
         </motion.div>
       )}
+
       {/* Voice AI Mentor Orb */}
       {session && session.sessionId && (
         <VoiceMentorOrb sessionId={session.sessionId} userCode={code} />
