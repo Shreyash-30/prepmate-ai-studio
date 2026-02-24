@@ -4,6 +4,7 @@ import {
   ReadinessScore,
   AdaptiveStudyPlan
 } from '../models/MLIntelligence.js';
+import UserTopicProgression from '../models/UserTopicProgression.js';
 import PracticeAttemptEvent from '../models/PracticeAttemptEvent.js';
 import User from '../models/User.js';
 import logger from '../utils/logger.js';
@@ -70,11 +71,26 @@ export const getStats = async (req, res) => {
     // 1. Problems Solved
     let problemsSolved = user.totalProblemsCount || 0;
     
-    // 2. Readiness Score
+    // 2. Readiness Score (ML Prediction first, then progression average)
     const latestReadiness = await ReadinessScore.findOne({ userId: String(userId) })
       .sort({ createdAt: -1 })
       .lean();
-    let readinessScore = latestReadiness ? latestReadiness.readinessScore : 0;
+    
+    let readinessScore = 0;
+    if (latestReadiness) {
+      // Handle both 0-1 probability and 0-100 score from ML models
+      const rawScore = latestReadiness.readinessScore || 0;
+      readinessScore = rawScore <= 1.0 ? Math.round(rawScore * 100) : Math.round(rawScore);
+    } else {
+      // Estimate readiness from all topic progressions (each is 0-1)
+      const topicProgressions = await UserTopicProgression.find({ userId }).lean();
+      if (topicProgressions.length > 0) {
+        const avgReadiness = topicProgressions.reduce((sum, p) => sum + (p.progressionReadinessScore || 0), 0) / topicProgressions.length;
+        readinessScore = Math.round(Math.min(avgReadiness, 1.0) * 100);
+      }
+    }
+    // Final safety cap
+    readinessScore = Math.min(readinessScore, 100);
 
     // 3. Practice Streak
     const recentAttempts = await PracticeAttemptEvent.find({ userId: userId })
@@ -112,21 +128,45 @@ export const getStats = async (req, res) => {
     if (user.platformProfiles?.leetcode?.connected) platformsSynced++;
     if (user.platformProfiles?.codeforces?.connected) platformsSynced++;
 
-    // FALLBACKS - Use dummy if real is 0, for demo stability
-    if (problemsSolved === 0) problemsSolved = DUMMY_STATS.problemsSolved;
-    if (readinessScore === 0) readinessScore = DUMMY_STATS.readinessScore;
-    if (streak === 0) streak = DUMMY_STATS.streak;
-    if (platformsSynced === 0) platformsSynced = DUMMY_STATS.platformsSynced;
+    // 5. Average Mastery (Try TopicMastery first, then UserTopicProgression)
+    const mlMastery = await TopicMastery.find({ userId: String(userId) }).lean();
+    let averageMasteryValue = 0;
+    
+    if (mlMastery.length > 0) {
+      averageMasteryValue = Math.round((mlMastery.reduce((sum, p) => sum + (p.mastery_probability || 0), 0) / mlMastery.length) * 100);
+    } else {
+      const dbMastery = await UserTopicProgression.find({ userId }).lean();
+      if (dbMastery.length > 0) {
+        averageMasteryValue = Math.round(dbMastery.reduce((sum, p) => sum + (p.masteryScore || 0), 0) / dbMastery.length);
+      }
+    }
+    // Final safety cap
+    averageMasteryValue = Math.min(averageMasteryValue, 100);
+
+    // 6. Recent Solved (Last 7 days)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const recentSolvedCount = await PracticeAttemptEvent.countDocuments({
+      userId,
+      correctness: true,
+      createdAt: { $gte: sevenDaysAgo }
+    });
+
+    // FALLBACKS - Use dummy values if real metrics are insufficient
+    // This provides a populated state for new accounts while real data accumulates
+    const finalStats = {
+      problemsSolved: problemsSolved || DUMMY_STATS.problemsSolved,
+      readinessScore: readinessScore || DUMMY_STATS.readinessScore,
+      streak: streak || DUMMY_STATS.streak,
+      platformsSynced: platformsSynced || DUMMY_STATS.platformsSynced,
+      platformsTotal: DUMMY_STATS.platformsTotal,
+      averageMastery: averageMasteryValue || 62,
+      recentSolved: recentSolvedCount || 8
+    };
 
     res.json({
       success: true,
-      data: {
-        problemsSolved,
-        readinessScore,
-        streak,
-        platformsSynced,
-        platformsTotal: DUMMY_STATS.platformsTotal
-      }
+      data: finalStats
     });
   } catch (error) {
     logger.error('Error in getStats:', error);

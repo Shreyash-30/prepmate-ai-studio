@@ -142,6 +142,7 @@ class EnhancedSubmissionProcessor {
           }).then(async (response) => {
             if (response.data?.success && response.data?.data) {
               const data = response.data.data;
+              // Update detailed progression record
               await UserTopicProgression.findOneAndUpdate(
                 { userId: submission.userId, topicId: submission.primaryTopicId || 'misc' },
                 {
@@ -154,9 +155,24 @@ class EnhancedSubmissionProcessor {
                     lastEvaluatedAt: new Date(),
                     lastAttemptAt: new Date(),
                   },
-                  $inc: { successfulAttempts: submission.status === 'Accepted' ? 1 : 0 }
+                  $inc: { successfulAttempts: submission.status === 'Accepted' || submission.status === 'accepted' ? 1 : 0 }
                 },
                 { upsert: true, new: true }
+              );
+
+              // Update the ML service's native tracking collection (used by dashboard)
+              await TopicMastery.findOneAndUpdate(
+                { userId: submission.userId, topicId: submission.primaryTopicId || 'misc' },
+                {
+                  $set: {
+                    mastery_probability: data.mastery_probability,
+                    attempts_count: data.attempts_count,
+                    recommended_difficulty: data.recommended_difficulty || 'medium',
+                    confidence_score: data.confidence_score || 0.5,
+                    last_attempt_timestamp: new Date()
+                  }
+                },
+                { upsert: true }
               );
             }
             return response;
@@ -177,6 +193,37 @@ class EnhancedSubmissionProcessor {
         case 'weakness':
           payload = MLFeatureBuilder.buildWeaknessAnalysisPayload(submission.userId);
           return await axios.post(`${ML_SERVICE_URL}/ai/ml/weakness/analyze`, payload, {
+            timeout: 60000,
+          });
+
+        case 'readiness':
+          payload = MLFeatureBuilder.buildReadinessPredictionPayload(
+            submission.userId,
+            user?.targetCompanies || 'general'
+          );
+          return await axios.post(`${ML_SERVICE_URL}/ai/ml/readiness/predict`, payload, {
+            timeout: 45000,
+          }).then(async (response) => {
+            if (response.data?.success && response.data?.data) {
+              const data = response.data.data;
+              await ReadinessScore.create({
+                userId: submission.userId,
+                readinessScore: data.readiness_score,
+                targetCompany: data.target_company,
+                probability: data.probability,
+                confidence: data.confidence
+              });
+            }
+            return response;
+          });
+
+        case 'planner':
+          payload = MLFeatureBuilder.buildPlanningPayload(submission.userId, {
+            dailyMinutes: user?.dailyStudyMinutes || 120,
+            targetCompany: user?.targetCompanies || 'general',
+            currentPhase: user?.preparationPhase || 'exploration'
+          });
+          return await axios.post(`${ML_SERVICE_URL}/ai/ml/planner/generate`, payload, {
             timeout: 60000,
           });
 

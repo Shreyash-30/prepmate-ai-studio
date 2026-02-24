@@ -111,6 +111,7 @@ async function bootstrap(userId, platform, username) {
       updateObj['platformProfiles.codeforces.contestRating'] = profile.contestRating;
       updateObj['platformProfiles.codeforces.ranking'] = profile.ranking;
       updateObj['platformProfiles.codeforces.badges'] = profile.badges;
+      updateObj['platformProfiles.codeforces.acceptanceRate'] = profile.acceptanceRate;
     }
 
     // Bulk insert submissions (handle duplicates gracefully)
@@ -329,12 +330,24 @@ async function bootstrap(userId, platform, username) {
     console.log(`  - Records inserted: ${recordsInserted}`);
     console.log(`  - Records duplicated: ${recordsDuplicated}`);
 
-    // Trigger full weakness analysis after successful bootstrap
-    if (userForML && recordsInserted > 0) {
-      console.log(`[${platform}] Triggering full Weakness Analysis post-bootstrap...`);
-      EnhancedSubmissionProcessor.callMLService('weakness', { userId }, userForML).catch(err => {
-        console.error(`[${platform}] Initial weakness analysis failed:`, err.message);
-      });
+    // Trigger full ML Intelligence update after successful bootstrap/resync
+    if (userForML) {
+      console.log(`[${platform}] Triggering full ML Intelligence updates post-sync...`);
+      
+      // 1. Weakness Analysis
+      EnhancedSubmissionProcessor.callMLService('weakness', { userId }, userForML)
+        .then(() => console.log(`[${platform}] Weakness analysis completed`))
+        .catch(err => console.error(`[${platform}] Weakness analysis failed:`, err.message));
+        
+      // 2. Readiness Prediction
+      EnhancedSubmissionProcessor.callMLService('readiness', { userId }, userForML)
+        .then(() => console.log(`[${platform}] Readiness prediction completed`))
+        .catch(err => console.error(`[${platform}] Readiness prediction failed:`, err.message));
+        
+      // 3. Adaptive Planner Generation
+      EnhancedSubmissionProcessor.callMLService('planner', { userId }, userForML)
+        .then(() => console.log(`[${platform}] Adaptive plan generation completed`))
+        .catch(err => console.error(`[${platform}] Adaptive planner failed:`, err.message));
     }
 
     return {

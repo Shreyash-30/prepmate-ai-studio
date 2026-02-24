@@ -140,17 +140,16 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard 
           icon={CheckCircle2} 
-          label="Mastery Score" 
-          value={stats?.problemsSolved || 0} 
+          label="Average Mastery" 
+          value={`${stats?.averageMastery || 0}%`} 
           sub={stats?.recentSolved ? `${stats.recentSolved} solved recently` : "Steady improvement"} 
           color="bg-emerald-500/10 text-emerald-500" 
-          trend="+12%"
         />
         <StatCard 
           icon={Target} 
           label="Overall Readiness" 
           value={`${stats?.readinessScore || 0}%`} 
-          sub={stats?.readinessDelta ? `${stats.readinessDelta >= 0 ? '+' : ''}${stats.readinessDelta}% readiness gain` : "Targeting top-tier"} 
+          sub={stats?.problemsSolved ? `${stats.problemsSolved} Total Problems Solved` : "Targeting top-tier"} 
           color="bg-indigo-500/10 text-indigo-500" 
         />
         <StatCard 

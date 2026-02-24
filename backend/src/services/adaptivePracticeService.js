@@ -55,11 +55,16 @@ class AdaptivePracticeService {
       }
 
       // 5. Determine recommended difficulty using mastery + progression
-      const masteryData = await this.queryMasteryFromML(userId, topicId);
-      // Use readiness as mastery if ML service unavailable or returns 0
-      const masteryScore = (masteryData?.mastery_probability && masteryData.mastery_probability > 0)
-        ? masteryData.mastery_probability
-        : progression.progressionReadinessScore;
+      // Prioritize stored masteryScore if it exists, otherwise query ML
+      let masteryScore = progression.masteryScore > 0 ? progression.masteryScore / 100 : 0;
+      
+      if (masteryScore === 0) {
+        const masteryData = await this.queryMasteryFromML(userId, topicId);
+        masteryScore = (masteryData?.mastery_probability && masteryData.mastery_probability > 0)
+          ? masteryData.mastery_probability
+          : progression.progressionReadinessScore;
+      }
+
       const recommendedDifficulty = this.determineRecommendedDifficulty(
         masteryScore,
         progression.progressionReadinessScore
@@ -93,6 +98,7 @@ class AdaptivePracticeService {
           color: topicMetadata.color,
           questionCount: topicMetadata.questionCount,
           difficulty: topicMetadata.difficulty,
+          category: topicMetadata.category,
         } : null,
         masteryScore: masteryScore,
         masteryConfidence: 0.8,
@@ -267,12 +273,16 @@ Keep it motivational and specific.
           };
 
           const stats = await PracticeAttemptEvent.getTopicStats(userId, topicId);
-          const masteryData = await this.queryMasteryFromML(userId, topicId);
-
-          // Use readiness as mastery if ML service unavailable or returns 0
-          const masteryScore = (masteryData?.mastery_probability && masteryData.mastery_probability > 0) 
-            ? masteryData.mastery_probability 
-            : prog.progressionReadinessScore;
+          
+          // Prioritize database mastery Score
+          let masteryScore = (prog.masteryScore && prog.masteryScore > 0) ? prog.masteryScore / 100 : 0;
+          
+          if (masteryScore === 0) {
+            const masteryData = await this.queryMasteryFromML(userId, topicId);
+            masteryScore = (masteryData?.mastery_probability && masteryData.mastery_probability > 0) 
+              ? masteryData.mastery_probability 
+              : prog.progressionReadinessScore;
+          }
 
           return {
             topicId: topicId,
@@ -283,6 +293,7 @@ Keep it motivational and specific.
               color: topicMetadata.color,
               questionCount: topicMetadata.questionCount,
               difficulty: topicMetadata.difficulty,
+              category: topicMetadata.category,
             },
             masteryScore: masteryScore,
             progressionReadinessScore: prog.progressionReadinessScore,

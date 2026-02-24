@@ -151,7 +151,7 @@ async function resync(req, res) {
     }
 
     // Trigger async resync
-    integrationBootstrapService.bootstrapAsync(userId, platform, account.username);
+    bootstrapAsync(userId, platform, account.username);
 
     return res.status(200).json({
       success: true,

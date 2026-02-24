@@ -332,11 +332,16 @@ class TopicProgressionService {
       const attempts = await PracticeAttemptEvent.getRecentPractice(userId, topicId, 10);
       
       const topicMetadata = await Topic.findOne({ topicId });
-      const masteryData = await TopicMastery.findOne({ userId, topicId });
       
-      const masteryScore = (masteryData?.mastery_probability && masteryData.mastery_probability > 0)
-        ? masteryData.mastery_probability
-        : progression.progressionReadinessScore;
+      // Prioritize database mastery Score from progression object
+      let masteryScore = (progression.masteryScore && progression.masteryScore > 0) ? progression.masteryScore / 100 : 0;
+      
+      if (masteryScore === 0) {
+        const masteryData = await TopicMastery.findOne({ userId, topicId });
+        masteryScore = (masteryData?.mastery_probability && masteryData.mastery_probability > 0)
+          ? masteryData.mastery_probability
+          : progression.progressionReadinessScore;
+      }
 
       return {
         topicId: topicId,

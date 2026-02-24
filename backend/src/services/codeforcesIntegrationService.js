@@ -30,11 +30,17 @@ async function fetchProfile(username) {
 
     console.log(`[Codeforces] User found: ${user.handle}`);
 
+    // For Codeforces, we fetch recent submissions to calculate an approximate acceptance rate
+    const recentSubmissions = await fetchSubmissions(username, 500);
+    const okCount = recentSubmissions.filter(s => s.status === 'accepted').length;
+    const totalCount = recentSubmissions.length;
+    const acceptanceRate = totalCount > 0 ? (okCount / totalCount) * 100 : 0;
+
     // Normalize profile data
     const profile = {
       username: user.handle,
       totalSolved: user.solvedCount || 0,
-      acceptanceRate: 0,
+      acceptanceRate: Math.round(acceptanceRate),
       contestRating: user.rating || 0,
       ranking: user.rank ? convertCFRankToNumber(user.rank) : 0,
       badges: user.titlePhoto ? [user.title] : [],
@@ -63,7 +69,7 @@ async function fetchProfile(username) {
  * @param {number} limit - Number of submissions to fetch (default: 100)
  * @returns {Promise<Array>} Array of submission objects
  */
-async function fetchSubmissions(username, limit = 100) {
+async function fetchSubmissions(username, limit = 500) {
   try {
     console.log(`[Codeforces] Fetching submissions for user: ${username} (limit: ${limit})`);
     

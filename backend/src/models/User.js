@@ -65,6 +65,7 @@ const userSchema = new mongoose.Schema(
         connected: { type: Boolean, default: false },
         username: { type: String, default: null },
         totalSolved: { type: Number, default: 0 },
+        acceptanceRate: { type: Number, default: 0 },
         contestRating: { type: Number, default: 0 },
         ranking: { type: Number, default: 0 },
         badges: [{ type: String }],
