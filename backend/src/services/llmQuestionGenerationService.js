@@ -301,7 +301,7 @@ class LLMQuestionGenerationService {
           learnerProfile: learnerProfile,
           limit: limit,
         },
-        { timeout: 30000 }
+        { timeout: 45000 }
       );
 
       console.log(`\n✅ AXIOS POST CALL SUCCESSFUL (Status ${response.status})`);

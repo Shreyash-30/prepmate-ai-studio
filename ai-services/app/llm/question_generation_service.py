@@ -9,74 +9,49 @@ import os
 import asyncio
 from typing import Optional, List, Dict, Any
 
-try:
-    import groq
-except ImportError:
-    groq = None
+from .gemini_client import get_gemini_client
 
 logger = logging.getLogger(__name__)
 
 
 class QuestionGenerationService:
-    """Service for generating personalized coding questions using Groq LLM"""
+    """Service for generating personalized coding questions using Multi-Provider LLM Router"""
 
     @staticmethod
     async def generate_questions(learner_profile: Dict[str, Any], limit: int = 5) -> Dict[str, Any]:
         """
-        Generate personalized coding questions based on learner profile using Groq
-        Uses Llama 3.3 70B Versatile model
+        Generate personalized coding questions based on learner profile
+        Uses Gemini (primary) with automatic fallback to Groq/Together AI
         """
         try:
-            # Check Groq API key
-            groq_key = os.getenv('GROQ_API_KEY')
-            if not groq_key:
-                logger.error("Groq API key not configured")
-                return {
-                    'success': False,
-                    'questions': [],
-                    'error': 'Groq API key not configured. Set GROQ_API_KEY environment variable.',
-                    'source': None
-                }
-            
-            if groq is None:
-                logger.error("Groq library not installed")
-                return {
-                    'success': False,
-                    'questions': [],
-                    'error': 'Groq library not installed',
-                    'source': None
-                }
-
-            # Initialize Groq client
-            groq_client = groq.Groq(api_key=groq_key)
-
             # Build the prompt
             prompt = QuestionGenerationService._build_generation_prompt(
                 learner_profile, limit
             )
             
-            logger.info(f"🤖 Generating {limit} questions via Groq for {learner_profile.get('topicId', 'Unknown')}")
+            logger.info(f"🤖 Generating {limit} questions via LLM Router for {learner_profile.get('topicId', 'Unknown')}")
             
-            # Call Groq to generate questions
-            loop = asyncio.get_event_loop()
-            response = await asyncio.wait_for(
-                loop.run_in_executor(
-                    None,
-                    lambda: groq_client.chat.completions.create(
-                        model="llama-3.3-70b-versatile",
-                        messages=[{"role": "user", "content": prompt}],
-                        temperature=0.7,
-                        max_tokens=4096,
-                        top_p=0.95,
-                    ),
-                ),
-                timeout=30,
+            # Use Gemini client (with automatic multi-provider fallback)
+            # Prefer Groq as requested by user for stability and speed
+            client = get_gemini_client()
+            response_text = await client.generate_response(
+                prompt=prompt,
+                temperature=0.7,
+                max_tokens=3072,
+                timeout=45,
+                preferred_provider='groq'
             )
             
-            response_text = response.choices[0].message.content.strip() if response.choices else ""
+            if not response_text or len(response_text) < 10:
+                logger.error("LLM returned empty or too short response")
+                return {
+                    'success': False,
+                    'questions': [],
+                    'error': 'LLM failed to generate content',
+                    'source': None
+                }
             
-            logger.info(f"[GROQ_RESPONSE] Received {len(response_text)} chars from Groq")
-            logger.info(f"[GROQ_RESPONSE] First 500 chars: {response_text[:500]}")
+            logger.info(f"[LLM_RESPONSE] Received {len(response_text)} chars")
             
             # Parse the response
             questions = QuestionGenerationService._parse_gemini_response(
@@ -85,7 +60,7 @@ class QuestionGenerationService:
             )
             
             if not questions:
-                logger.error("No questions parsed from Gemini response")
+                logger.error("No questions parsed from LLM response")
                 return {
                     'success': False,
                     'questions': [],
@@ -98,7 +73,7 @@ class QuestionGenerationService:
                 'success': True,
                 'questions': questions,
                 'generatedAt': str(__import__('datetime').datetime.utcnow()),
-                'source': 'gemini'
+                'source': 'llm_router'
             }
             
         except Exception as e:
@@ -353,13 +328,45 @@ Generate {limit} diverse, high-quality questions now. Each must be valid JSON on
             
             logger.info(f"[PARSE] After markdown removal: {len(text)} chars")
             
+            # Try to find JSON in the text
+            if not text.startswith('[') and not text.startswith('{'):
+                # Search for the first '[' or '{'
+                array_start = text.find('[')
+                object_start = text.find('{')
+                
+                if array_start != -1 and (object_start == -1 or array_start < object_start):
+                    text = text[array_start:]
+                    logger.info(f"[PARSE] Found start of array at {array_start}")
+                elif object_start != -1:
+                    text = text[object_start:]
+                    logger.info(f"[PARSE] Found start of object at {object_start}")
+
             # Handle different JSON formats
             questions = []
             
             if text.startswith('['):
                 # JSON array format
                 logger.info("[PARSE] Detected JSON array format")
-                questions = json.loads(text)
+                try:
+                    # Find matching closing bracket
+                    bracket_count = 0
+                    last_bracket = -1
+                    for idx, char in enumerate(text):
+                        if char == '[': bracket_count += 1
+                        elif char == ']':
+                            bracket_count -= 1
+                            if bracket_count == 0:
+                                last_bracket = idx
+                                break
+                    
+                    if last_bracket != -1:
+                        text = text[:last_bracket+1]
+                    
+                    questions = json.loads(text)
+                except Exception as e:
+                    logger.warning(f"[PARSE] Array parse failed: {str(e)}")
+                    # Try fallback to multi-object parsing
+                    questions = QuestionGenerationService._parse_multiple_json_objects(text)
             elif text.startswith('{'):
                 # Multiple JSON objects format - parse with brace matching
                 logger.info("[PARSE] Detected multiple JSON object format (NDJSON)")

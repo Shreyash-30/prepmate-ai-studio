@@ -83,6 +83,7 @@ class GeminiClient:
         max_tokens: int = 2048,
         retry_count: int = 3,
         timeout: int = 30,
+        preferred_provider: Optional[str] = None,
     ) -> str:
         """
         Generate response from Gemini or fallback providers with automatic failover
@@ -93,18 +94,19 @@ class GeminiClient:
             max_tokens: Maximum tokens in response
             retry_count: Number of retries on failure
             timeout: Timeout in seconds
+            preferred_provider: Optional preferred provider (gemini, groq, together)
 
         Returns:
             Generated response text, or fallback message if all APIs unavailable
         """
-        # Use multi-provider router - will try Gemini first, then Groq, then Together AI
+        # Use multi-provider router
         result = await self.router.generate_response(
             prompt=prompt,
             temperature=temperature,
             max_tokens=max_tokens,
             retry_count=retry_count,
             timeout=timeout,
-            preferred_provider='gemini'  # Try Gemini first
+            preferred_provider=preferred_provider or 'gemini'
         )
 
         if result['success']:

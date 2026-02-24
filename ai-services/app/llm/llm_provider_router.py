@@ -289,46 +289,61 @@ class LLMProviderRouter:
     async def _call_groq(
         self, prompt: str, temperature: float, max_tokens: int, retry_count: int, timeout: int
     ) -> str:
-        """Call Groq API - Uses latest flagship model (llama-3.3-70b-versatile)"""
+        """Call Groq API - Uses llama-3.3-70b-versatile with fallback to 8b-instant"""
         try:
             import groq
         except ImportError:
             raise Exception("Groq library not installed")
 
-        for attempt in range(retry_count):
-            try:
-                loop = asyncio.get_event_loop()
-                response = await asyncio.wait_for(
-                    loop.run_in_executor(
-                        None,
-                        lambda: self.groq_client.chat.completions.create(
-                            model="llama-3.3-70b-versatile",  # Latest flagship (reasoning, planning, analytics)
-                            messages=[{"role": "user", "content": prompt}],
-                            temperature=temperature,
-                            max_tokens=min(max_tokens, 8192),  # Groq token limit
-                            top_p=0.95,
+        models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "llama3-70b-8192"]
+        
+        last_error = None
+        for model_name in models:
+            for attempt in range(retry_count):
+                try:
+                    logger.info(f"💾 Groq: Trying model {model_name} (attempt {attempt+1})")
+                    loop = asyncio.get_event_loop()
+                    response = await asyncio.wait_for(
+                        loop.run_in_executor(
+                            None,
+                            lambda: self.groq_client.chat.completions.create(
+                                model=model_name,
+                                messages=[{"role": "user", "content": prompt}],
+                                temperature=temperature,
+                                max_tokens=min(max_tokens, 8192),
+                                top_p=0.95,
+                            ),
                         ),
-                    ),
-                    timeout=timeout,
-                )
+                        timeout=timeout,
+                    )
 
-                if response.choices and response.choices[0].message.content:
-                    return response.choices[0].message.content.strip()
-                else:
+                    if response.choices and response.choices[0].message.content:
+                        return response.choices[0].message.content.strip()
+                    else:
+                        if attempt < retry_count - 1:
+                            await asyncio.sleep(2 ** attempt)
+                            continue
+                        raise Exception(f"Empty response from Groq model {model_name}")
+
+                except asyncio.TimeoutError:
+                    last_error = DeadlineExceeded(f"Groq model {model_name} timed out")
+                    break # Try next model
+                except Exception as e:
+                    last_error = e
+                    error_msg = str(e).lower()
+                    if "quota" in error_msg or "rate limit" in error_msg or "429" in error_msg:
+                        logger.warning(f"⚠️ Groq model {model_name} rate limited: {error_msg}")
+                        break # Try next model
+                    
                     if attempt < retry_count - 1:
                         await asyncio.sleep(2 ** attempt)
                         continue
-                    raise Exception("Empty response from Groq")
-
-            except asyncio.TimeoutError:
-                raise DeadlineExceeded("Groq request timed out")
-            except Exception as e:
-                if "quota" in str(e).lower():
-                    raise ResourceExhausted(str(e))
-                if attempt < retry_count - 1:
-                    await asyncio.sleep(2 ** attempt)
-                    continue
-                raise
+                    break # Try next model
+        
+        # If all models failed
+        if "quota" in str(last_error).lower():
+            raise ResourceExhausted(str(last_error))
+        raise last_error
 
     async def call_groq_fast(
         self, prompt: str, temperature: float = 0.4, max_tokens: int = 1024

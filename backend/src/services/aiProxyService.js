@@ -24,7 +24,7 @@ async function callAIService(endpoint, method = 'POST', data = null) {
         headers: {
           'Content-Type': 'application/json',
         },
-        timeout: 30000,
+        timeout: 45000,
       };
 
       if (data) {

@@ -138,7 +138,7 @@ class EnhancedSubmissionProcessor {
             user?.learningLevel || 'intermediate'
           );
           return await axios.post(`${ML_SERVICE_URL}/ai/ml/mastery/update`, payload, {
-            timeout: 10000,
+            timeout: 45000,
           }).then(async (response) => {
             if (response.data?.success && response.data?.data) {
               const data = response.data.data;
@@ -171,13 +171,13 @@ class EnhancedSubmissionProcessor {
 
           payload = MLFeatureBuilder.buildRetentionUpdatePayload(submission, priorRetention);
           return await axios.post(`${ML_SERVICE_URL}/ai/ml/retention/update`, payload, {
-            timeout: 10000,
+            timeout: 45000,
           });
 
         case 'weakness':
           payload = MLFeatureBuilder.buildWeaknessAnalysisPayload(submission.userId);
           return await axios.post(`${ML_SERVICE_URL}/ai/ml/weakness/analyze`, payload, {
-            timeout: 15000,
+            timeout: 60000,
           });
 
         default:
