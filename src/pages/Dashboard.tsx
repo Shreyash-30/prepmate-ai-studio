@@ -1,4 +1,6 @@
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { dashboardService } from '@/services/api';
 import {
   TrendingUp,
   Target,
@@ -22,7 +24,7 @@ const item = {
 };
 
 function StatCard({ icon: Icon, label, value, sub, color }: {
-  icon: React.ElementType; label: string; value: string; sub?: string; color: string;
+  icon: React.ElementType; label: string; value: string | number; sub?: string; color: string;
 }) {
   return (
     <motion.div variants={item} className="glass-card p-5">
@@ -48,39 +50,6 @@ function PanelCard({ title, children }: { title: string; children: React.ReactNo
   );
 }
 
-const heatmapData = [
-  { topic: 'Arrays', level: 85 },
-  { topic: 'Trees', level: 62 },
-  { topic: 'DP', level: 40 },
-  { topic: 'Graphs', level: 55 },
-  { topic: 'Strings', level: 78 },
-  { topic: 'Sorting', level: 90 },
-  { topic: 'Linked Lists', level: 70 },
-  { topic: 'Stacks', level: 82 },
-];
-
-const weakTopics = [
-  { topic: 'Dynamic Programming', reason: 'Only 40% mastery, 3 failed attempts', priority: 'high' as const },
-  { topic: 'Graph Traversal', reason: 'BFS/DFS weak, 55% mastery', priority: 'medium' as const },
-  { topic: 'Backtracking', reason: 'Not attempted recently', priority: 'low' as const },
-];
-
-const todayTasks = [
-  { label: 'Solve 2 DP problems (Medium)', done: false },
-  { label: 'Revise BFS/DFS notes', done: true },
-  { label: 'Complete mock interview', done: false },
-  { label: 'Review graph problems', done: false },
-];
-
-const trendData = [
-  { week: 'W1', score: 45 },
-  { week: 'W2', score: 52 },
-  { week: 'W3', score: 58 },
-  { week: 'W4', score: 65 },
-  { week: 'W5', score: 70 },
-  { week: 'W6', score: 74 },
-];
-
 function getLevelColor(level: number) {
   if (level >= 80) return 'bg-success/20 text-success';
   if (level >= 60) return 'bg-primary/20 text-primary';
@@ -89,6 +58,56 @@ function getLevelColor(level: number) {
 }
 
 export default function Dashboard() {
+  const [stats, setStats] = useState<any>(null);
+  const [heatmapData, setHeatmapData] = useState<any[]>([]);
+  const [weakTopics, setWeakTopics] = useState<any[]>([]);
+  const [todayTasks, setTodayTasks] = useState<any[]>([]);
+  const [trendData, setTrendData] = useState<any[]>([]);
+  const [readinessScores, setReadinessScores] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const [
+          statsResp,
+          heatmapResp,
+          weakTopicsResp,
+          tasksResp,
+          trendResp,
+          readinessResp
+        ] = await Promise.all([
+          dashboardService.getStats(),
+          dashboardService.getMasteryHeatmap(),
+          dashboardService.getWeakTopics(),
+          dashboardService.getTodayTasks(),
+          dashboardService.getPerformanceTrend(),
+          dashboardService.getReadinessScore()
+        ]);
+
+        setStats(statsResp.data.data);
+        setHeatmapData(heatmapResp.data.data);
+        setWeakTopics(weakTopicsResp.data.data);
+        setTodayTasks(tasksResp.data.data);
+        setTrendData(trendResp.data.data);
+        setReadinessScores(readinessResp.data.data);
+      } catch (error) {
+        console.error('Failed to fetch dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex h-[80vh] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    );
+  }
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">
       <div>
@@ -98,10 +117,32 @@ export default function Dashboard() {
 
       {/* Stats row */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard icon={CheckCircle2} label="Problems Solved" value="247" sub="+12 this week" color="bg-success/10 text-success" />
-        <StatCard icon={Target} label="Readiness Score" value="74%" sub="+6% from last week" color="bg-primary/10 text-primary" />
-        <StatCard icon={Flame} label="Practice Streak" value="14 days" color="bg-warning/10 text-warning" />
-        <StatCard icon={BarChart3} label="Platforms Synced" value="3/4" color="bg-chart-4/10 text-chart-4" />
+        <StatCard 
+          icon={CheckCircle2} 
+          label="Problems Solved" 
+          value={stats?.problemsSolved || 0} 
+          sub={stats?.recentSolved ? `+${stats.recentSolved} this week` : undefined} 
+          color="bg-success/10 text-success" 
+        />
+        <StatCard 
+          icon={Target} 
+          label="Readiness Score" 
+          value={`${stats?.readinessScore || 0}%`} 
+          sub={stats?.readinessDelta ? `${stats.readinessDelta >= 0 ? '+' : ''}${stats.readinessDelta}% from last week` : undefined} 
+          color="bg-primary/10 text-primary" 
+        />
+        <StatCard 
+          icon={Flame} 
+          label="Practice Streak" 
+          value={`${stats?.streak || 0} days`} 
+          color="bg-warning/10 text-warning" 
+        />
+        <StatCard 
+          icon={BarChart3} 
+          label="Platforms Synced" 
+          value={`${stats?.platformsSynced || 0}/${stats?.platformsTotal || 2}`} 
+          color="bg-chart-4/10 text-chart-4" 
+        />
       </div>
 
       {/* Main grid */}
@@ -109,9 +150,9 @@ export default function Dashboard() {
         {/* Mastery Heatmap */}
         <PanelCard title="Topic Mastery">
           <div className="space-y-2.5">
-            {heatmapData.map((t) => (
+            {heatmapData.length > 0 ? heatmapData.map((t) => (
               <div key={t.topic} className="flex items-center gap-3">
-                <span className="w-24 text-xs text-muted-foreground truncate">{t.topic}</span>
+                <span className="w-24 text-xs text-muted-foreground truncate capitalize">{t.topic}</span>
                 <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
                   <motion.div
                     initial={{ width: 0 }}
@@ -122,36 +163,42 @@ export default function Dashboard() {
                 </div>
                 <span className="w-10 text-right text-xs font-medium text-foreground">{t.level}%</span>
               </div>
-            ))}
+            )) : (
+              <div className="py-8 text-center text-xs text-muted-foreground">No mastery data yet. Start practicing!</div>
+            )}
           </div>
         </PanelCard>
 
         {/* Weak Topics */}
         <PanelCard title="Weak Topic Alerts">
           <div className="space-y-3">
-            {weakTopics.map((w) => (
+            {weakTopics.length > 0 ? weakTopics.map((w) => (
               <div key={w.topic} className="flex items-start gap-3 rounded-md bg-accent/50 p-3">
                 <AlertTriangle className={`mt-0.5 h-4 w-4 shrink-0 ${w.priority === 'high' ? 'text-destructive' : w.priority === 'medium' ? 'text-warning' : 'text-muted-foreground'}`} />
                 <div>
-                  <p className="text-sm font-medium text-foreground">{w.topic}</p>
+                  <p className="text-sm font-medium text-foreground capitalize">{w.topic}</p>
                   <p className="text-xs text-muted-foreground">{w.reason}</p>
                 </div>
               </div>
-            ))}
+            )) : (
+              <div className="py-8 text-center text-xs text-muted-foreground">No weak topics identified. Keep it up!</div>
+            )}
           </div>
         </PanelCard>
 
         {/* Today's Tasks */}
         <PanelCard title="Today's Tasks">
           <div className="space-y-2">
-            {todayTasks.map((t, i) => (
+            {todayTasks.length > 0 ? todayTasks.map((t, i) => (
               <label key={i} className="flex items-center gap-3 rounded-md p-2 hover:bg-accent/50 transition-colors cursor-pointer">
                 <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${t.done ? 'border-success bg-success/10' : 'border-border'}`}>
                   {t.done && <CheckCircle2 className="h-3.5 w-3.5 text-success" />}
                 </div>
                 <span className={`text-sm ${t.done ? 'text-muted-foreground line-through' : 'text-foreground'}`}>{t.label}</span>
               </label>
-            ))}
+            )) : (
+              <div className="py-8 text-center text-xs text-muted-foreground">No tasks scheduled for today.</div>
+            )}
           </div>
         </PanelCard>
       </div>
@@ -159,10 +206,10 @@ export default function Dashboard() {
       {/* Bottom row */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Performance Trend */}
-        <PanelCard title="Interview Performance Trend">
+        <PanelCard title="Readiness Evolution">
           <div className="flex items-end gap-3 h-32">
-            {trendData.map((d) => (
-              <div key={d.week} className="flex flex-1 flex-col items-center gap-1">
+            {trendData.length > 0 ? trendData.map((d, i) => (
+              <div key={i} className="flex flex-1 flex-col items-center gap-1">
                 <motion.div
                   initial={{ height: 0 }}
                   animate={{ height: `${d.score}%` }}
@@ -171,19 +218,16 @@ export default function Dashboard() {
                 />
                 <span className="text-[10px] text-muted-foreground">{d.week}</span>
               </div>
-            ))}
+            )) : (
+              <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">Insufficient data for trend.</div>
+            )}
           </div>
         </PanelCard>
 
         {/* Readiness per company */}
         <PanelCard title="Company Readiness">
           <div className="space-y-3">
-            {[
-              { company: 'Google', score: 68 },
-              { company: 'Amazon', score: 74 },
-              { company: 'Meta', score: 55 },
-              { company: 'Microsoft', score: 80 },
-            ].map((c) => (
+            {readinessScores.length > 0 ? readinessScores.map((c) => (
               <div key={c.company} className="flex items-center justify-between">
                 <span className="text-sm text-foreground">{c.company}</span>
                 <div className="flex items-center gap-2">
@@ -198,7 +242,9 @@ export default function Dashboard() {
                   <span className={`text-xs font-semibold ${getLevelColor(c.score)} px-2 py-0.5 rounded`}>{c.score}%</span>
                 </div>
               </div>
-            ))}
+            )) : (
+              <div className="py-8 text-center text-xs text-muted-foreground">Target companies not set or no data.</div>
+            )}
           </div>
         </PanelCard>
       </div>

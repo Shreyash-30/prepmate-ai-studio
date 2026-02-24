@@ -8,6 +8,7 @@ import integrationRoutes from './routes/integrationRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
 import practiceRoutes from './routes/practiceRoutes.js';
 import revisionRoutes from './routes/revisionRoutes.js';
+import dashboardRoutes from './routes/dashboardRoutes.js';
 import { validateEnvironment } from './utils/envValidator.js';
 import logger from './utils/logger.js';
 
@@ -36,6 +37,7 @@ app.use('/api/integrations', integrationRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/practice', practiceRoutes);
 app.use('/api/revision', revisionRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // 404 handler
 app.use((req, res) => {
