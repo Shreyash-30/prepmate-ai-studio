@@ -18,6 +18,7 @@ class MasteryUpdateRequest(BaseModel):
     topic_id: str
     attempts: List[Dict]  # [{correct: bool, difficulty: int, hints_used: int, time_ms: float}]
     learning_level: str = "beginner"  # beginner, intermediate, advanced
+    is_revision: bool = False  # Track if this is from a revision session
 
 
 class MasteryMetrics(BaseModel):
@@ -55,6 +56,7 @@ class BayesianKnowledgeTracing:
         correct: bool,
         difficulty_factor: float = 1.0,
         hints_used: int = 0,
+        is_revision: bool = False,
     ) -> Tuple[float, float]:
         """
         Update mastery probability using BKT
@@ -64,6 +66,7 @@ class BayesianKnowledgeTracing:
             correct: Whether response was correct
             difficulty_factor: 0.5-2.0, adjusts learning rate
             hints_used: Number of hints used
+            is_revision: Whether the attempt is a revision
             
         Returns:
             (posterior_probability, confidence_score)
@@ -71,6 +74,10 @@ class BayesianKnowledgeTracing:
         # Adjust learning rate based on difficulty
         p_learn = self.params["p_learn"] * difficulty_factor
         
+        # Phase 4 Modification: Reduced learning effect for revision to avoid spikes
+        if is_revision:
+            p_learn *= 0.5
+            
         # Reduce learning if hints were used
         if hints_used > 0:
             p_learn *= max(0.5, 1.0 - hints_used * 0.2)
@@ -107,8 +114,9 @@ class BayesianKnowledgeTracing:
                 )
             )
             
-            # No learning on incorrect, but may decay
-            posterior = p_knows_after_attempt * 0.95
+            # No learning on incorrect, but may decay (unless it's a revision, then decay less)
+            decay_factor = 0.98 if is_revision else 0.95
+            posterior = p_knows_after_attempt * decay_factor
         
         # Clamp to valid range
         posterior = np.clip(posterior, 0.0, 1.0)
@@ -119,13 +127,14 @@ class BayesianKnowledgeTracing:
         
         return float(posterior), float(confidence)
     
-    def batch_update(self, prior: float, attempts: List[Dict]) -> Tuple[float, float]:
+    def batch_update(self, prior: float, attempts: List[Dict], is_revision: bool = False) -> Tuple[float, float]:
         """
         Process multiple attempts sequentially
         
         Args:
             prior: Initial mastery probability
             attempts: List of attempt dicts
+            is_revision: Global flag for revision sequence
             
         Returns:
             (final_probability, average_confidence)
@@ -137,12 +146,14 @@ class BayesianKnowledgeTracing:
             correct = attempt.get("correct", False)
             difficulty = attempt.get("difficulty", 1.0)
             hints = attempt.get("hints_used", 0)
-            time_factor = attempt.get("time_factor", 1.0)
+            
+            # Check individual flag or fallback to global
+            attempt_is_rev = attempt.get("is_revision", is_revision)
             
             # Adjust difficulty factor
             diff_factor = 0.5 + (difficulty / 3.0)
             
-            current, conf = self.update(current, correct, diff_factor, hints)
+            current, conf = self.update(current, correct, diff_factor, hints, is_revision=attempt_is_rev)
             confidences.append(conf)
         
         avg_confidence = float(np.mean(confidences)) if confidences else 0.5
@@ -194,7 +205,7 @@ class MasteryEngine:
             prior = current_doc.get("mastery_probability", 0.1) if current_doc is not None else 0.1
             
             # Process attempts
-            posterior, confidence = self.bkt.batch_update(prior, request.attempts)
+            posterior, confidence = self.bkt.batch_update(prior, request.attempts, request.is_revision)
             
             # Calculate improvement trend
             if current_doc is not None:

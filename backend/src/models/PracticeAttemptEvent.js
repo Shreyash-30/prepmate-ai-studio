@@ -246,6 +246,12 @@ const practiceAttemptEventSchema = new mongoose.Schema(
       type: String,
       description: 'AI Lab session ID if applicable',
     },
+
+    isRevision: {
+      type: Boolean,
+      default: false,
+      description: 'True if attempt was part of a revision session',
+    },
   },
   {
     timestamps: true,

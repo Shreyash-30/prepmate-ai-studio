@@ -9,6 +9,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Practice = lazy(() => import('./pages/Practice'));
 const PracticeProblem = lazy(() => import('./pages/PracticeProblem'));
 const Revision = lazy(() => import('./pages/Revision'));
+const RevisionWorkspace = lazy(() => import('./pages/RevisionWorkspace'));
 const MockInterview = lazy(() => import('./pages/MockInterview'));
 const Planner = lazy(() => import('./pages/Planner'));
 const Integrations = lazy(() => import('./pages/Integrations'));
@@ -44,6 +45,7 @@ const App = () => (
             <Route path="/practice" element={<ProtectedRoute element={<Practice />} />} />
             <Route path="/ai-lab/:problemId" element={<ProtectedRoute element={<PracticeProblem />} />} />
             <Route path="/revision" element={<ProtectedRoute element={<Revision />} />} />
+            <Route path="/revision/:topicId/session/:sessionId" element={<ProtectedRoute element={<RevisionWorkspace />} />} />
             <Route path="/mock-interview" element={<ProtectedRoute element={<MockInterview />} />} />
             <Route path="/planner" element={<ProtectedRoute element={<Planner />} />} />
             <Route path="/integrations" element={<ProtectedRoute element={<Integrations />} />} />

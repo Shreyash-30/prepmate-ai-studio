@@ -176,6 +176,21 @@ class InlineAssistRequest(BaseModel):
     language: str = Field(default="javascript")
 
 
+class RevisionSummaryRequest(BaseModel):
+    """Request for revision summary"""
+    topicName: str
+    weakSubtopics: Optional[List[str]] = []
+    mistakePatterns: Optional[List[str]] = []
+    retentionProbability: float
+
+class RevisionSummaryResponse(BaseModel):
+    """Structured revision summary response"""
+    summary: str = Field(..., description="150-word recap of the topic")
+    commonPitfalls: List[str] = Field(default=[], description="Common pitfalls to watch out for")
+    memoryChecklist: List[str] = Field(default=[], description="Key things to remember")
+    edgeCaseWarnings: List[str] = Field(default=[], description="Edge case warnings")
+
+
 # ============================================================================
 # STREAMING RESPONSE SCHEMAS
 # ============================================================================

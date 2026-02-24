@@ -55,6 +55,7 @@ const TopicMasterySchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    collection: 'topic_mastery'
   }
 );
 
@@ -103,6 +104,7 @@ const RevisionScheduleSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    collection: 'revision_schedule'
   }
 );
 
@@ -151,6 +153,7 @@ const WeakTopicSignalSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    collection: 'weak_topic_signal'
   }
 );
 
@@ -203,6 +206,7 @@ const ReadinessScoreSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    collection: 'readiness_score'
   }
 );
 
@@ -248,6 +252,7 @@ const AdaptiveStudyPlanSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    collection: 'adaptive_study_plan'
   }
 );
 

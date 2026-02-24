@@ -30,10 +30,74 @@ from ..schemas.schemas import (
     HealthResponse,
     ProviderStatus,
     MetricsResponse,
+    RevisionSummaryRequest,
+    RevisionSummaryResponse,
 )
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai", tags=["ai-advanced"])
+
+
+# ============================================================================
+# REVISION SUMMARY (LLM RECAP)
+# ============================================================================
+
+@router.post("/revision/summary", response_model=RevisionSummaryResponse)
+async def generate_revision_summary(request: RevisionSummaryRequest = Body(...)):
+    """
+    Generate an optional LLM summary/recap for a revision session.
+    Features: 150-word recap, common pitfalls, memory checklist, edge cases.
+    """
+    try:
+        logger.info(f"📚 Generating revision summary for {request.topicName}")
+        
+        prompt = f"""
+You are an expert programming mentor creating a quick revision guide for {request.topicName}.
+The user has a retention probability of {request.retentionProbability:.1%}.
+Their weak subtopics: {', '.join(request.weakSubtopics) if request.weakSubtopics else 'None specified'}
+Their mistake patterns: {', '.join(request.mistakePatterns) if request.mistakePatterns else 'None specified'}
+
+Provide a structured JSON response with NO markdown formatting:
+{{
+  "summary": "Quick 150-word recap of the core concepts...",
+  "commonPitfalls": ["Pitfall 1", "Pitfall 2"],
+  "memoryChecklist": ["Concept 1", "Concept 2"],
+  "edgeCaseWarnings": ["Edge case 1", "Edge case 2"]
+}}
+
+Return ONLY valid JSON.
+"""
+        
+        import os, json
+        groq_key = os.getenv('GROQ_API_KEY')
+        import groq as groq_lib
+        groq_client = groq_lib.Groq(api_key=groq_key)
+        
+        response = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=800,
+        )
+        
+        result_text = response.choices[0].message.content.strip()
+        
+        try:
+            summary_data = json.loads(result_text)
+            return RevisionSummaryResponse(**summary_data)
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.error(f"Invalid summary JSON: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Invalid summary response format"
+            )
+            
+    except Exception as e:
+        logger.error(f"Summary generation error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Summary generation failed: {str(e)}"
+        )
 
 
 # ============================================================================
