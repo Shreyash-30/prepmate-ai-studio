@@ -1,9 +1,0 @@
-{
-  "code": "print('hello world')",
-  "testCases": [
-    {
-      "input": "",
-      "expectedOutput": "hello world"
-    }
-  ]
-}

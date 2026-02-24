@@ -11,9 +11,52 @@ export default function AppHeader() {
   const { theme, toggleTheme } = useTheme();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [userName, setUserName] = useState('User');
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  useEffect(() => {
+    // Load user from localStorage
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        if (user && user.name) {
+          setUserName(user.name);
+        }
+      } catch (e) {
+        console.error('Failed to parse user from localStorage', e);
+      }
+    }
+
+    // Also listen for changes in case user updates profile
+    const handleStorageChange = () => {
+      const updatedUserStr = localStorage.getItem('user');
+      if (updatedUserStr) {
+        try {
+          const user = JSON.parse(updatedUserStr);
+          if (user && user.name) {
+            setUserName(user.name);
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(part => part[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2) || 'U';
+  };
 
   const handleLogout = async () => {
     setLoggingOut(true);
@@ -83,10 +126,10 @@ export default function AppHeader() {
             className="flex items-center gap-3 rounded-xl p-1.5 pl-2 hover:bg-muted transition-all duration-300 shadow-sm"
           >
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary text-sm font-bold shadow-inner">
-              S
+              {getInitials(userName)}
             </div>
             <div className="hidden sm:block text-left">
-              <p className="text-xs font-bold text-foreground">Shreyash</p>
+              <p className="text-xs font-bold text-foreground truncate max-w-[100px]">{userName}</p>
               <p className="text-[10px] text-muted-foreground font-medium">Pro Member</p>
             </div>
             <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform duration-300", dropdownOpen && "rotate-180")} />

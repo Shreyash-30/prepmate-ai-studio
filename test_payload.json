@@ -1,6 +1,0 @@
-{
-  "sessionId": "sess_123",
-  "code": "def two_sum(arr, target):\n    for i in range(len(arr)):\n        for j in range(i+1, len(arr)):\n            if arr[i] + arr[j] == target:\n                return [i, j]\n    return []",
-  "language": "python",
-  "problemStatement": "Find two numbers that add up to target"
-}

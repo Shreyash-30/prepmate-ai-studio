@@ -218,7 +218,7 @@ export default function Integrations() {
                               <p className="text-[9px] font-extrabold uppercase text-muted-foreground mt-1">Problems Indexed</p>
                            </div>
                            <div className="p-4 rounded-xl bg-primary/[0.02] border border-primary/10 text-center">
-                              <p className="text-xl font-bold text-primary">{Math.round(integration.profile.acceptanceRate * 100)}%</p>
+                              <p className="text-xl font-bold text-primary">{Math.round(integration.profile.acceptanceRate)}%</p>
                               <p className="text-[9px] font-extrabold uppercase text-muted-foreground mt-1">Acceptance Rate</p>
                            </div>
                         </div>
@@ -263,7 +263,7 @@ export default function Integrations() {
                           placeholder={`ENTER ${config.name.toUpperCase()} HANDLE`}
                           className="h-14 pl-12 rounded-2xl bg-muted/30 border-border/40 text-xs font-bold uppercase tracking-widest focus-visible:ring-primary/20 placeholder:opacity-30"
                           value={usernames[platform]}
-                          onChange={(e) => setUsernames({ ...prev => ({ ...prev, [platform]: e.target.value }) })}
+                          onChange={(e) => setUsernames(prev => ({ ...prev, [platform]: e.target.value }))}
                           disabled={!!connecting}
                         />
                       </div>

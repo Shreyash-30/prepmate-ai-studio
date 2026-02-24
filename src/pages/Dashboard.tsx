@@ -140,7 +140,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard 
           icon={CheckCircle2} 
-          label="Mastery Scope" 
+          label="Mastery Score" 
           value={stats?.problemsSolved || 0} 
           sub={stats?.recentSolved ? `${stats.recentSolved} solved recently` : "Steady improvement"} 
           color="bg-emerald-500/10 text-emerald-500" 
@@ -162,7 +162,7 @@ export default function Dashboard() {
         />
         <StatCard 
           icon={BarChart3} 
-          label="Retention Rank" 
+          label="Platform sync" 
           value={`${stats?.platformsSynced || 0}/8`} 
           sub="Platform integrations" 
           color="bg-cyan-500/10 text-cyan-500" 
