@@ -43,44 +43,46 @@ router = APIRouter(prefix="/ai", tags=["ai-advanced"])
 @router.post("/hint/generate", response_class=StreamingResponse)
 async def generate_hint_streaming(request: HintGenerationRequest = Body(...)):
     """
-    Generate adaptive hints with streaming response
+    Generate adaptive hints with raw text streaming response
     
-    Supports hint levels 1-4:
-    - Level 1: General approach direction
-    - Level 2: Key data structures
-    - Level 3: Algorithm outline
-    - Level 4: Nearly complete solution
-    
-    Uses Server-Sent Events for streaming tokens
+    Supports hint levels 1-4.
+    Raw tokens are streamed back for direct frontend consumption.
     """
     try:
-        logger.info(f"🔍 Generating hint level {request.hintLevel} for {request.topicId}")
+        logger.info(f"🔍 Generating raw stream hint level {request.hintLevel} for {request.problemTitle}")
         
         # Build prompt for hint generation
+        # Level 1: General approach
+        # Level 2: Key concept
+        # Level 3: Algorithm hint
+        # Level 4: Code structural hint
         hint_prompt = f"""
-Generate a coding hint at LEVEL {request.hintLevel} (scale 1-4, where 4 is almost the solution).
+You are an expert coding mentor. Provide a {request.hintLevel}/4 level hint for the following problem.
 
-Problem: {request.problemStatement}
+Problem: {request.problemTitle}
+Description: {request.problemDescription}
 
-Current Code:
+Current User Code:
+```{request.language}
 {request.currentCode or 'No code yet'}
+```
 
-Requirements:
-1. Hint must be at exactly level {request.hintLevel}
-2. Return ONLY valid JSON matching this structure:
-{{
-  "level": {request.hintLevel},
-  "hintText": "...",
-  "dependencyWeight": 0.X,
-  "approachDirection": "...",
-  "keyInsight": "..."
-}}
+Hint Level Requirements:
+- Level 1: Very subtle, just point them in the right direction.
+- Level 2: Mention the key concept or data structure.
+- Level 3: Describe the algorithm or logic steps.
+- Level 4: Provide a concrete structural example or logic breakdown.
 
-No markdown, no explanation, just JSON.
-"""
+Rules:
+1. Provide ONLY the hint text.
+2. DO NOT provide the full solution.
+3. Be encouraging but brief.
+4. Response must be plain text, NO JSON.
+
+Level {request.hintLevel} Hint:"""
         
         async def stream_hint():
-            """Stream hint generation tokens"""
+            """Stream raw hint generation tokens"""
             try:
                 # Initialize Groq client
                 groq_key = os.getenv('GROQ_API_KEY')
@@ -88,43 +90,26 @@ No markdown, no explanation, just JSON.
                 groq_client = groq_lib.Groq(api_key=groq_key)
                 
                 # Stream the response
-                with groq_client.chat.completions.create(
+                completion = groq_client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
                     messages=[{"role": "user", "content": hint_prompt}],
                     stream=True,
                     temperature=0.7,
                     max_tokens=1024,
-                ) as response:
-                    collected_tokens = ""
-                    
-                    for chunk in response:
-                        if chunk.choices[0].delta.content:
-                            token = chunk.choices[0].delta.content
-                            collected_tokens += token
-                            
-                            # Stream token
-                            yield f"data: {json.dumps({'token': token, 'type': 'text'})}\n\n"
-                            await asyncio.sleep(0.01)  # Small delay for client buffering
-                    
-                    # Parse and validate final JSON
-                    try:
-                        hint_data = json.loads(collected_tokens)
-                        hint_response = HintResponse(**hint_data)
-                        yield f"data: {json.dumps(hint_response.model_dump())}\n\n"
-                    except (json.JSONDecodeError, ValueError) as e:
-                        logger.error(f"Invalid hint JSON: {e}")
-                        yield f"data: {json.dumps({'error': 'Invalid response format'})}\n\n"
-                    
-                    # Signal stream end
-                    yield "data: [DONE]\n\n"
+                )
+                
+                for chunk in completion:
+                    if chunk.choices[0].delta.content:
+                        token = chunk.choices[0].delta.content
+                        yield token
                     
             except Exception as e:
                 logger.error(f"Stream error: {e}")
-                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                yield f"\n[Error: {str(e)}]"
         
         return StreamingResponse(
             stream_hint(),
-            media_type="text/event-stream",
+            media_type="text/plain",
             headers={
                 "Cache-Control": "no-cache",
                 "Connection": "keep-alive",

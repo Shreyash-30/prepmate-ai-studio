@@ -139,12 +139,13 @@ class InlineSuggestion(BaseModel):
 
 class HintGenerationRequest(BaseModel):
     """Request to generate a hint"""
-    sessionId: str
-    problemStatement: str
+    problemTitle: Optional[str] = "Coding Problem"
+    problemDescription: Optional[str] = ""
+    constraints: Optional[List[str]] = []
+    testCases: Optional[List[dict]] = []
     currentCode: Optional[str] = None
     hintLevel: int = Field(default=1, ge=1, le=4)
     language: str = Field(default="javascript")
-    topicId: Optional[str] = None
 
 
 class CodeReviewRequest(BaseModel):

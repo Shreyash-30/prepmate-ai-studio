@@ -107,12 +107,12 @@ router.post('/score-explanation/:sessionId', optionalAuth, practiceController.re
 router.get('/session/:sessionId', optionalAuth, practiceController.getSession);
 
 /**
- * GET /api/practice/hint/:sessionId
- * Stream hints as Server-Sent Events (SSE)
- * Query params: level, token
+ * POST /api/practice/hint/:sessionId
+ * Stream hints as plain text
+ * Body: {currentCode, language, hintLevel}
  * Auth: Optional (session ownership is checked in controller)
  */
-router.get('/hint/:sessionId', optionalAuth, practiceController.streamHint);
+router.post('/hint/:sessionId', optionalAuth, practiceController.streamHint);
 
 /**
  * GET /api/practice/review/:sessionId

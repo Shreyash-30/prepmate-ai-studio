@@ -481,12 +481,20 @@ practiceSessionSchema.methods.addHint = function (level, text, tokensUsed, cost)
     tokensUsed,
     requestedAt: new Date(),
   });
-  this.costGovernance.hintCallCount += 1;
+  this.incrementHintCount();
   this.llmUsageTokens.hintTokens += tokensUsed;
   this.llmUsageTokens.totalTokens += tokensUsed;
   this.llmCostEstimate.hintCost += cost;
   this.llmCostEstimate.totalEstimatedCost += cost;
   this.telemetry.hint_levels_used = Math.max(this.telemetry.hint_levels_used || 0, level);
+};
+
+/**
+ * Increment hint count for cost governance
+ */
+practiceSessionSchema.methods.incrementHintCount = function () {
+  this.costGovernance.hintCallCount += 1;
+  this.costGovernance.llmCallCount += 1; // Also counts as an LLM call
 };
 
 /**

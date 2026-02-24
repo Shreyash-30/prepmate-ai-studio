@@ -1541,95 +1541,109 @@ export const requestScoreExplanation = async (req, res) => {
 };
 
 /**
- * GET /api/practice/hint/:sessionId
- * Stream hint as Server-Sent Events (SSE)
- * Query params: level, token
+ * POST /api/practice/hint/:sessionId
+ * Stream hint as plain text (Transparent Proxy)
+ * Body: {currentCode, language, hintLevel}
  */
 export const streamHint = async (req, res) => {
+  const { sessionId } = req.params;
+  const { currentCode, language, hintLevel } = req.body;
+  const userId = req.user ? req.user._id : null;
+
   try {
-    const { sessionId } = req.params;
-    const { level = 1, token } = req.query;
-    const hintLevel = parseInt(level) || 1;
-
-    // Optional auth - support demo users
-    let userId;
-    try {
-      if (token) {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key_here');
-        userId = decoded.userId || decoded._id;
-      } else if (req.user) {
-        userId = req.user._id;
-      }
-    } catch (err) {
-      // Continue without auth for demo
-    }
-
     const session = await PracticeSession.findById(sessionId);
     if (!session) {
-      res.status(404).json({
+      return res.status(404).json({
         success: false,
         message: 'Practice session not found',
       });
-      return;
     }
 
-    // Verify ownership (skip if demo)
-    if (userId && session.userId.toString() !== userId.toString()) {
-      res.status(403).json({
+    // Verify ownership (if user authenticated and not demo)
+    if (userId && !userId.toString().includes('demo-user') && session.userId.toString() !== userId.toString()) {
+      return res.status(403).json({
         success: false,
         message: 'Unauthorized',
       });
-      return;
     }
 
-    // Check cost governance
+    // Check cost governance before starting stream
     if (!session.canRequestHint()) {
-      res.status(429).json({
+      return res.status(403).json({
         success: false,
-        message: 'Hint limit reached',
+        message: 'Hint limit exceeded for this session',
       });
-      return;
     }
 
-    // Setup SSE response
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    const ai_service_url = process.env.AI_SERVICE_URL || 'http://localhost:8001';
+
+    // Set streaming headers
+    res.setHeader("Content-Type", "text/plain");
+    res.setHeader("Transfer-Encoding", "chunked");
+    res.setHeader("X-Accel-Buffering", "no"); // Disable buffering for Nginx if present
 
     try {
-      // Get hint from service
-      const hint = await practiceSessionService.getHint(session, hintLevel);
+      const aiResponse = await axios.post(
+        `${ai_service_url}/ai/hint/generate`,
+        {
+          problemTitle: session.problemTitle || session.problemId || 'Coding Problem',
+          problemDescription: session.problemStatement || session.problemDescription || '',
+          constraints: session.constraints || [],
+          testCases: session.testCases || [],
+          currentCode,
+          language,
+          hintLevel: hintLevel || 1
+        },
+        {
+          responseType: "stream",
+          timeout: 30000 // 30s timeout for initial connection
+        }
+      );
 
-      // Send hint as SSE
-      res.write(`data: ${JSON.stringify({
-        type: 'chunk',
-        content: hint.hintText || hint.text || 'Here is a helpful hint...',
-      })}\n\n`);
+      // Binary transparency: pipe raw chunks
+      aiResponse.data.on("data", (chunk) => {
+        res.write(chunk);
+      });
 
-      // Send completion message
-      res.write(`data: ${JSON.stringify({
-        type: 'complete',
-        content: 'Hint generated successfully',
-      })}\n\n`);
+      aiResponse.data.on("end", async () => {
+        // Increment usage count on successful completion
+        session.incrementHintCount();
+        await session.save();
+        res.end();
+      });
 
-      res.end();
-    } catch (error) {
-      logger.error('Error streaming hint:', error);
-      res.write(`data: ${JSON.stringify({
-        type: 'error',
-        content: error.message || 'Failed to generate hint',
-        error: error.message,
-      })}\n\n`);
+      aiResponse.data.on("error", (err) => {
+        logger.error(`AI stream error for session ${sessionId}:`, err.message);
+        if (!res.writableEnded) res.end();
+      });
+
+      // Handle client abort
+      req.on('close', () => {
+        if (aiResponse.data.destroy) aiResponse.data.destroy();
+      });
+
+    } catch (err) {
+      logger.error(`Failed to connect to AI service for hint: ${err.message}`);
+      // If we haven't started sending the stream yet, return an error
+      if (!res.headersSent) {
+        return res.status(502).json({
+          success: false,
+          message: 'AI Service currently unavailable',
+        });
+      }
       res.end();
     }
   } catch (error) {
-    logger.error('Error in streamHint:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to stream hint',
-      error: error.message,
-    });
+    logger.error(`Error in streamHint controller: ${error.message}`);
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        error: error.message
+      });
+    } else {
+      res.end();
+    }
   }
 };
 

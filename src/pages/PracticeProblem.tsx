@@ -70,6 +70,7 @@ export default function PracticeProblem() {
   const [showInlineAssist, setShowInlineAssist] = useState(false);
   const [showCodeReview, setShowCodeReview] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
+  const [hintText, setHintText] = useState("");
   const [running, setRunning] = useState(false);
   const [runResults, setRunResults] = useState<any>(null);
 
@@ -258,18 +259,50 @@ export default function PracticeProblem() {
     console.log(`🔄 Switched to ${newLanguage}`);
   };
 
-  // Request hint (non-blocking)
+  // Request hint (non-blocking streaming)
   const handleGetHint = async () => {
+    if (!session?.sessionId) return;
+
     try {
       setGettingHint(true);
-
-      await getHint(hintLevel + 1, (message) => {
-        if (message.type === 'chunk' && message.content) {
-          setHints((prev) => [...prev, message.content]);
-        } else if (message.type === 'error') {
-          toast({ title: 'Error', description: 'Failed to get hint' });
+      setHintText("");
+      
+      const token = localStorage.getItem('auth_token') || 'demo-token';
+      const response = await fetch(
+        `${API_BASE_URL}/practice/hint/${session.sessionId}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            currentCode: code,
+            language: selectedLanguage,
+            hintLevel: hintLevel + 1
+          })
         }
-      });
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || errorData.error || "Failed to get hint");
+      }
+
+      if (!response.body) {
+        throw new Error("No streaming body received");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        setHintText(prev => prev + chunk);
+      }
 
       setHintLevel((prev) => Math.min(prev + 1, 5));
     } catch (err) {
@@ -701,7 +734,7 @@ export default function PracticeProblem() {
         <div className="space-y-2">
           <h2 className="text-sm font-semibold text-foreground">💡 Hints</h2>
           <div className="glass-card p-4 space-y-4 max-h-96 overflow-y-auto">
-            {hints.length === 0 ? (
+            {!hintText && hints.length === 0 ? (
               <p className="text-xs text-muted-foreground">
                 Stuck? Click "Hint" for progressive guidance
               </p>
@@ -721,6 +754,24 @@ export default function PracticeProblem() {
                     </motion.div>
                   );
                 })}
+                {hintText && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded bg-primary/5 p-4 text-xs text-foreground border border-primary/20"
+                  >
+                    <div className="font-medium text-primary mb-2 flex items-center gap-2">
+                      <HelpCircle className="h-3 w-3" />
+                      Current Hint (Level {hintLevel}):
+                    </div>
+                    <div className="prose prose-invert prose-xs whitespace-pre-wrap">
+                      {hintText}
+                    </div>
+                    {gettingHint && (
+                      <span className="inline-block w-2 h-4 ml-1 bg-primary animate-pulse" />
+                    )}
+                  </motion.div>
+                )}
               </div>
             )}
           </div>
