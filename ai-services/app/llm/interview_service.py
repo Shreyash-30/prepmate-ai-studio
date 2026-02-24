@@ -96,7 +96,7 @@ class InterviewService:
                 topic=request.topic,
             )
 
-            response_text = await self.gemini.generate_response(
+            response_text = await self.gemini.generate_content(
                 prompt=prompt,
                 temperature=0.6,
                 max_tokens=1500,
@@ -309,7 +309,7 @@ STRENGTHS: [What they did well]
 IMPROVEMENTS: [What could be better]
 SUGGESTIONS: [Specific recommendations]"""
 
-            feedback = await self.gemini.generate_response(
+            feedback = await self.gemini.generate_content(
                 prompt=prompt,
                 temperature=0.5,
                 max_tokens=800,

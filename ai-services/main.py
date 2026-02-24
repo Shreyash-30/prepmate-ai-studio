@@ -40,10 +40,13 @@ try:
         set_practice_review_service,
         set_interview_service,
         set_learning_service,
+        set_voice_service,
         MentorService,
         PracticeReviewService,
         InterviewService,
         LearningService,
+        VoiceInteractionService,
+        voice_router,
     )
     from app.llm.advanced_routers import router as advanced_router
     try:
@@ -127,6 +130,10 @@ async def lifespan(app: FastAPI):
         set_learning_service(learning_service)
         logger.info("✅ Learning service initialized")
 
+        voice_service = VoiceInteractionService(db)
+        set_voice_service(voice_service)
+        logger.info("✅ Voice interaction service initialized")
+
         # Initialize ML Intelligence Layer
         await initialize_ml_services(db)
         logger.info("✅ ML Intelligence Layer initialized")
@@ -169,6 +176,7 @@ def create_app() -> FastAPI:
     # Include routers
     app.include_router(router)
     app.include_router(advanced_router)
+    app.include_router(voice_router)
     if ml_available and ml_router:
         app.include_router(ml_router)
 

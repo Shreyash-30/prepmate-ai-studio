@@ -99,7 +99,7 @@ class LearningService:
                 user_knowledge_level=request.userKnowledgeLevel,
             )
 
-            content_text = await self.gemini.generate_response(
+            content_text = await self.gemini.generate_content(
                 prompt=prompt,
                 temperature=0.6,
                 max_tokens=3000,
@@ -169,7 +169,7 @@ Include:
 
 Keep it focused and practical."""
 
-            summary = await self.gemini.generate_response(
+            summary = await self.gemini.generate_content(
                 prompt=prompt,
                 temperature=0.5,
                 max_tokens=300,
@@ -193,7 +193,7 @@ Keep it focused and practical."""
                 detail_level=detail_level,
             )
 
-            explanation = await self.gemini.generate_response(
+            explanation = await self.gemini.generate_content(
                 prompt=prompt,
                 temperature=0.5,
                 max_tokens=1000,
@@ -226,7 +226,7 @@ A: [Answer]
 
 Separate each pair with a blank line."""
 
-            flashcards_text = await self.gemini.generate_response(
+            flashcards_text = await self.gemini.generate_content(
                 prompt=prompt,
                 temperature=0.5,
                 max_tokens=800,

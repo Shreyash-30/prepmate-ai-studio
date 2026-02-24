@@ -20,8 +20,11 @@ from .learning_service import (
     set_learning_service,
 )
 from .question_generation_service import QuestionGenerationService
+from .voice_interaction_service import VoiceInteractionService, get_voice_service, set_voice_service
 from .routers import router
+from .voice_router import router as voice_router
 
+# Voice Service initialized in main.py lifespan
 __all__ = [
     "get_gemini_client",
     "initialize_gemini",
@@ -39,5 +42,9 @@ __all__ = [
     "get_learning_service",
     "set_learning_service",
     "QuestionGenerationService",
+    "VoiceInteractionService",
+    "get_voice_service",
+    "set_voice_service",
     "router",
+    "voice_router",
 ]

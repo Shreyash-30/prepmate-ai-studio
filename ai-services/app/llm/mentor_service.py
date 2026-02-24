@@ -111,7 +111,7 @@ class MentorService:
                 mastery_score=request.masteryScore,
             )
 
-            mentor_response = await self.gemini.generate_response(
+            mentor_response = await self.gemini.generate_content(
                 prompt=prompt,
                 temperature=0.7,
                 max_tokens=1500,
@@ -245,7 +245,7 @@ Summary should include:
 3. Recommendations given
 4. Learning outcomes"""
 
-            summary = await self.gemini.generate_response(
+            summary = await self.gemini.generate_content(
                 prompt=prompt,
                 temperature=0.3,
                 max_tokens=500,

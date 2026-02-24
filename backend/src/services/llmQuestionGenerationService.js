@@ -238,6 +238,7 @@ class LLMQuestionGenerationService {
             testCases: Array.isArray(plainQ.testCasesStructured) ? plainQ.testCasesStructured : [],
             schemaVersion: 2,
             source: 'other',
+            topicId: topicId, // Return topicId for frontend session creation
           };
         });
         logger.info(`✅ MAPPED TO FRONTEND FORMAT: ${questionsToReturn.length} questions`);
@@ -254,10 +255,11 @@ class LLMQuestionGenerationService {
           hints: Array.isArray(q.hints) ? q.hints : [],
           functionName: q.functionName || 'solve',
           testCases: q.testCases || [],
-          schemaVersion: 1,  // Fall back to v1
+          schemaVersion: 2,  // ENFORCE v2 even in fallback
           source: 'other',
+          topicId: topicId,
         }));
-        logger.warn(`   Using fallback: ${questionsToReturn.length} questions in v1 format`);
+        logger.warn(`   Using fallback: ${questionsToReturn.length} questions in v2 format`);
       }
 
       return {
@@ -463,6 +465,7 @@ class LLMQuestionGenerationService {
           logger.debug(`Question previously generated: ${q.problemTitle}`);
           processed.push({
             ...enrichedQuestion,
+            problemId: existingQuestion.problemId,
             isDuplicate: true,
             duplicateOf: existingQuestion._id,
           });
@@ -1003,13 +1006,10 @@ Generate ${learnerProfile.desiredQuestionCount} questions now.`;
     let skipped = 0;
 
     for (const q of questions) {
-      if (q.isDuplicate) continue;
-
       try {
-        if (!q.problemTitle) {
-          logger.warn(`❌ Question missing problemTitle`);
-          skipped++;
-          continue;
+        if (!q.problemTitle || q.problemTitle.toLowerCase() === 'general' || q.problemTitle.toLowerCase() === 'problem') {
+          logger.warn(`❌ Question missing valid problemTitle, using primaryConceptTested`);
+          q.problemTitle = q.primaryConceptTested || `Generated ${topicId} Problem`;
         }
 
         // Get test cases (may be testCases or testCasesStructured)

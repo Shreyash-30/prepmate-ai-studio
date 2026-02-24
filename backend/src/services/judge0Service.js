@@ -24,6 +24,7 @@
 
 import axios from 'axios';
 import logger from '../utils/logger.js';
+import AIObservabilityService from './AIObservabilityService.js';
 
 // Judge0 Configuration from Environment
 const JUDGE0_BASE_URL = process.env.JUDGE0_BASE_URL || 'https://judge0-ce.p.rapidapi.com';
@@ -646,7 +647,7 @@ class Judge0Service {
       }
     }
 
-    return {
+    const result = {
       verdict: overallVerdict,
       passedTests,
       totalTests,
@@ -654,6 +655,15 @@ class Judge0Service {
       memory: maxMemory,
       results: formattedResults,
     };
+
+    // Log to observability service
+    AIObservabilityService.logSandboxExecution({
+      verdict: overallVerdict,
+      executionTime: maxRuntime * 1000, // logSandboxExecution expects ms
+      memoryUsed: maxMemory / 1024,     // logSandboxExecution expects MB
+    });
+
+    return result;
   }
 
   // ============================================================

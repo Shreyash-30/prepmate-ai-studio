@@ -317,7 +317,12 @@ export default function Practice() {
                     learnerLevel={question.learnerLevel}
                     onAILabClick={() => {
                       // Navigate to AI Lab code editor with problem
-                      const problemId = question.problemId || question.problemTitle?.toLowerCase().replace(/\s+/g, '-');
+                      const problemId = question.problemId || (question.problemTitle || question.title || 'problem')
+                        .toLowerCase()
+                        .replace(/\s+/g, '-')
+                        .replace(/[^a-z0-9-]/g, '')
+                        .replace(/-+/g, '-')
+                        .replace(/^-+|-+$/g, '');
                       navigate(`/ai-lab/${problemId}`, {
                         state: { problem: question },
                       });

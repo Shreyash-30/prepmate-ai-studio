@@ -4,7 +4,7 @@
 
 Phase 3 implements Express backend routes that orchestrate the complete practice workflow:
 - **Session Management**: Create/get practice sessions
-- **Code Submission**: Submit code, run Docker sandbox, get verdict
+- **Code Submission**: Submit code, run Judge0 (RapidAPI), get verdict
 - **AI Features**: Request hints, code reviews, inline suggestions, explanation scoring
 - **Cost Governance**: Enforce token limits, hint limits, cost thresholds  
 - **ML Integration**: Enqueue async jobs for mastery/readiness updates
@@ -23,7 +23,7 @@ Phase 3 implements Express backend routes that orchestrate the complete practice
 │                                                                │
 │ POST /api/practice/submit                                     │
 │   → Code + problem ID                                        │
-│   → Runs DockerSandboxJudge (isolated execution)            │
+│   → Runs Judge0 API (isolated execution)                     │
 │   → Enqueues ML jobs (masteryUpdate, readinessPrediction)  │
 │   ← Returns {verdict, passedTests, mlJobIds}                │
 │                                                                │
@@ -61,7 +61,7 @@ Phase 3 implements Express backend routes that orchestrate the complete practice
 ┌────────────────────────────────────────────────────────────────┐
 │ Supporting Services                                            │
 ├────────────────────────────────────────────────────────────────┤
-│ Docker Sandbox Judge      (isolated code execution)            │
+│ Judge0 API Engine     (RapidAPI code execution)            │
 │ Job Queue Service         (BullMQ + Redis async jobs)          │
 │ AI Observability Service  (metrics & telemetry)                │
 │ MongoDB PracticeSession   (session state, cost tracking)       │
@@ -138,7 +138,7 @@ Phase 3 implements Express backend routes that orchestrate the complete practice
 **Backend Flow**:
 1. Fetch PracticeSession
 2. Verify ownership (userId matches)
-3. Run code in **DockerSandboxJudge** (isolated, 256MB, 2s timeout)
+3. Run code in **Judge0 API** (isolated, 256MB, 2s timeout)
 4. Get verdict (accepted, wrong_answer, timeout, memory_exceeded, runtime_error)
 5. Update session with submissionResult, telemetry, dependencyScore
 6. **Enqueue 4 ML jobs** (non-blocking):
@@ -315,7 +315,7 @@ Phase 3 implements Express backend routes that orchestrate the complete practice
 **3. backend/src/services/practiceSessionService.js** ✅ NEW
 - Orchestration service (360+ lines)
 - Functions:
-  - `submitPractice()` - Docker sandbox + ML jobs
+  - `submitPractice()` - Judge0 API + ML jobs
   - `getHint()` - FastAPI call + cost tracking
   - `getInlineAssistance()` - FastAPI call + cost tracking
   - `getCodeReview()` - FastAPI call + storage
@@ -335,9 +335,9 @@ Phase 3 implements Express backend routes that orchestrate the complete practice
 - Already complete with all required fields
 - No changes needed
 
-**6. backend/src/services/DockerSandboxJudge.js** ✅ (from Phase 1)
-- Already integrated
-- Used in submitPractice()
+**6. backend/src/services/judge0Service.js** ✅
+- Production-grade Judge0 integration
+- Used in submitPractice() and runCode()
 
 **7. backend/src/services/JobQueueService.js** ✅ (from Phase 1)
 - Already integrated
@@ -361,7 +361,7 @@ Phase 3 implements Express backend routes that orchestrate the complete practice
 
 3. User clicks "Submit"
    POST /api/practice/submit {code, explanation}
-   ├→ DockerSandboxJudge (isolated execution)
+   ├→ Judge0 API (isolated execution)
    ├→ Get verdict: accepted/wrong_answer/timeout
    ├→ Enqueue ML jobs (async, non-blocking)
    └← Return {verdict, passedTests, mlJobIds}
@@ -477,7 +477,7 @@ dependencyScore: {
 Phase 3 automatically enqueues jobs when submission completes:
 
 ```javascript
-// After DockerSandboxJudge returns verdict:
+// After Judge0 API returns verdict:
 const jobs = await JobQueueService.enqueueSubmissionMLJobs(
   sessionId,
   userId,
@@ -499,7 +499,7 @@ const jobs = await JobQueueService.enqueueSubmissionMLJobs(
 ## Testing Checklist
 
 - ✅ POST /api/practice/session/start creates session
-- ✅ POST /api/practice/submit runs Docker sandbox + enqueues jobs
+- ✅ POST /api/practice/submit runs Judge0 API + enqueues jobs
 - ✅ GET /api/practice/session/:sessionId returns state
 - ✅ POST /api/practice/hint/:sessionId calls FastAPI hint endpoint
 - ✅ POST /api/practice/inline-assist/:sessionId calls FastAPI

@@ -54,18 +54,23 @@ export const validateQuestionForPractice = (question) => {
     return errors;
   }
 
-  if (!question.isActive) {
+  const problemId = question.problemId || 'unknown';
+  const title = question.title || question.problemTitle || problemId;
+  const isActive = question.isActive !== false;
+
+  logger.info(`🔍 Validating question: "${title}" (${problemId})`);
+
+  if (!isActive) {
     errors.push('Question is not active');
   }
 
   if (question.schemaVersion !== 2) {
-    errors.push(`Question using schemaVersion ${question.schemaVersion}, only v2 supported`);
+    errors.push(`Question using schemaVersion ${question.schemaVersion || 'undefined'}, only v2 supported`);
   }
 
   if (!question.wrapperTemplate) {
     errors.push('Question missing wrapperTemplate');
   } else {
-    // Check at least one language has wrapper
     const languages = ['python', 'javascript', 'java', 'cpp', 'go'];
     const hasLanguage = languages.some(lang => question.wrapperTemplate[lang]);
     if (!hasLanguage) {
@@ -83,23 +88,22 @@ export const validateQuestionForPractice = (question) => {
     }
   }
 
-  if (!question.testCasesStructured || !Array.isArray(question.testCasesStructured)) {
-    errors.push('Question missing testCasesStructured array');
-  } else if (question.testCasesStructured.length === 0) {
-    errors.push('Question testCasesStructured is empty');
+  // Support both testCasesStructured and testCases for validation
+  const testCases = question.testCasesStructured || question.testCases;
+  
+  if (!testCases || !Array.isArray(testCases)) {
+    errors.push('Question missing test cases array (testCasesStructured or testCases)');
+  } else if (testCases.length === 0) {
+    errors.push('Question test cases array is empty');
   } else {
-    // Validate each test case
-    for (const tc of question.testCasesStructured) {
+    for (let i = 0; i < testCases.length; i++) {
+      const tc = testCases[i];
       if (tc.input === undefined || tc.input === null) {
-        errors.push('Test case missing input');
+        errors.push(`Test case [${i}] missing input`);
         break;
       }
-      if (tc.expectedOutput === undefined || tc.expectedOutput === null) {
-        errors.push('Test case missing expectedOutput');
-        break;
-      }
-      if (!['public', 'hidden'].includes(tc.visibility)) {
-        errors.push(`Test case has invalid visibility: ${tc.visibility}`);
+      if (tc.expectedOutput === undefined && tc.output === undefined) {
+        errors.push(`Test case [${i}] missing expectedOutput or output`);
         break;
       }
     }
@@ -107,6 +111,12 @@ export const validateQuestionForPractice = (question) => {
 
   if (!question.functionMetadata) {
     errors.push('Question missing functionMetadata');
+  }
+
+  if (errors.length > 0) {
+    logger.error(`❌ Validation failed for "${title}": ${errors.join(', ')}`);
+  } else {
+    logger.info(`✅ Validation passed for "${title}"`);
   }
 
   return errors;

@@ -34,12 +34,13 @@ class QuestionGenerationService:
             # Use Gemini client (with automatic multi-provider fallback)
             # Prefer Groq as requested by user for stability and speed
             client = get_gemini_client()
-            response_text = await client.generate_response(
+            response_text = await client.generate_content(
                 prompt=prompt,
                 temperature=0.7,
                 max_tokens=3072,
-                timeout=45,
-                preferred_provider='groq'
+                timeout=25,
+                provider='groq',
+                retry_count=1
             )
             
             if not response_text or len(response_text) < 10:

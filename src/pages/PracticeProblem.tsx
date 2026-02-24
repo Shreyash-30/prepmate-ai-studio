@@ -16,9 +16,13 @@ import { CodeReviewPanel } from '@/components/CodeReviewPanel';
 import { ExplanationModal } from '@/components/ExplanationModal';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import VoiceMentorOrb from '@/components/VoiceMentorOrb';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
 
 interface ProblemData {
   id: string;
+  problemId?: string;
   title: string;
   description: string;
   difficulty: 'easy' | 'medium' | 'hard';
@@ -31,6 +35,7 @@ interface ProblemData {
   whyRecommended?: string;
   hints?: string[];
   approachGuide?: string;
+  topicId?: string;
 }
 
 export default function PracticeProblem() {
@@ -85,7 +90,8 @@ export default function PracticeProblem() {
             initialCode: selectedProblem.initialCode || `# Solve the problem\n# Write your solution here`,
             testCases: selectedProblem.testCases || [{ input: 'Sample input', output: 'Expected output' }],
             constraints: selectedProblem.constraints || [],
-            topic: selectedProblem.topic,
+            topic: selectedProblem.topic || (selectedProblem as any).topicId,
+            topicId: (selectedProblem as any).topicId || selectedProblem.topic,
             whyRecommended: selectedProblem.whyRecommended,
             hints: selectedProblem.hints,
             approachGuide: selectedProblem.approachGuide,
@@ -96,20 +102,23 @@ export default function PracticeProblem() {
           // Fallback: try to fetch from API (for direct URL access)
           const token = localStorage.getItem('auth_token') || 'demo-token';
           const response = await fetch(
-            `http://localhost:8000/api/practice/problems/${problemId}`,
+            `${API_BASE_URL}/practice/questions/${problemId}`,
             { headers: { Authorization: `Bearer ${token}` } }
           ).catch(() => null);
 
           if (response?.ok) {
-            const data = await response.json();
+            const result = await response.json();
+            const data = result.data;
             const problemData: ProblemData = {
-              id: data.id || problemId || 'unknown',
+              id: data.problemId || data.id || problemId || 'unknown',
+              problemId: data.problemId || data.id,
               title: data.title || data.problemTitle || 'Unknown Problem',
-              description: data.description || 'Solve this problem',
+              description: data.description || data.content || 'Solve this problem',
               difficulty: data.difficulty?.toLowerCase() as any || 'medium',
-              initialCode: data.initialCode || data.code || `# Solve the problem\n# Write your solution here`,
+              initialCode: data.starterCode?.python || data.starterCode?.javascript || data.initialCode || data.code || `# Solve the problem\n# Write your solution here`,
               testCases: data.testCases || [],
               constraints: data.constraints || [],
+              topicId: data.topicId || data.topic,
             };
             setProblem(problemData);
             setCode(problemData.initialCode);
@@ -167,7 +176,7 @@ export default function PracticeProblem() {
       const problemId = (problem as any).problemId || problem.id; // Use problemId if available, fallback to id
       const topicId = (problem as any).topic || (problem as any).topicId || 'general'; // Use topic if available
       
-      createSession(problemId, topicId, language).catch(() => {
+      createSession(topicId, problemId, language).catch(() => {
         toast({ title: 'Error', description: 'Failed to create session' });
       });
     }
@@ -764,6 +773,10 @@ export default function PracticeProblem() {
             {typeof sessionError === 'string' ? sessionError : JSON.stringify(sessionError)}
           </p>
         </motion.div>
+      )}
+      {/* Voice AI Mentor Orb */}
+      {session && session.sessionId && (
+        <VoiceMentorOrb sessionId={session.sessionId} userCode={code} />
       )}
     </motion.div>
   );

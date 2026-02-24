@@ -2,7 +2,7 @@
  * Practice Session Service
  * 
  * Orchestrates practice session workflows:
- * - Submitting code to Docker sandbox
+ * - Submitting code to RapidAPI Judge0
  * - Calling FastAPI AI endpoints for hints, reviews, suggestions
  * - Tracking LLM costs and usage
  * - Enqueuing ML jobs for async processing
@@ -10,7 +10,6 @@
  */
 
 import axios from 'axios';
-import DockerSandboxJudge from './DockerSandboxJudge.js';
 import { JobQueueService } from './JobQueueService.js';
 import AIObservabilityService from './AIObservabilityService.js';
 import logger from '../utils/logger.js';
@@ -127,9 +126,8 @@ export async function submitPractice(session, code, explanation = '', voiceTrans
         // Track telemetry
         session.telemetry.retry_count = (session.telemetry.retry_count || 0) + 1;
 
-        // Compute dependency score
-        const dependencyWeight = Math.min(1, (session.hints.length * 0.1) + (voiceTranscript ? 0.2 : 0));
-        session.dependencyScore.independenceScore = Math.max(0, 1 - dependencyWeight);
+        // Compute dependency score using centralized logic
+        session.computeDependencyScore();
 
         // Log LLM usage (if any hints were given)
         if (session.hints && session.hints.length > 0) {
@@ -511,78 +509,96 @@ export function getSessionCostSummary(session) {
 }
 
 /**
- * Handle voice input from user
- * Classifies intent and provides mentor response
- * 
- * intents:
- * - help: General assistance request
- * - hint: Explicit hint request
- * - clarification: Need problem clarification
- * - submit: Ready to submit code
- * - stuck: User is stuck
+ * Log a structured voice interaction and update telemetry
  */
-export async function handleVoiceInput(session, transcript, intent, context) {
+export async function logVoiceInteraction(session, interactionData) {
   try {
-    logger.info(`🎤 Processing voice input: "${transcript.substring(0, 50)}..."`);
+    const { transcript, response, intent, dependencyWeight, tokenUsage } = interactionData;
 
-    // Call FastAPI mentor chat endpoint
-    const mentorRequest = {
-      sessionId: session._id.toString(),
+    // 1. Add interaction to log
+    session.voiceInteractions.push({
       transcript,
-      intent: intent || 'help',
-      currentCode: context || session.code || '',
-      problemStatement: session.problemStatement || '',
-      language: session.codeLanguage,
-    };
+      response,
+      intent: intent || 'general',
+      dependencyWeight: dependencyWeight || 0,
+      tokenUsage: tokenUsage || 0,
+      createdAt: new Date()
+    });
 
-    const response = await callAIEndpoint('/ai/mentor/chat', 'POST', mentorRequest);
+    // 2. Update telemetry counters
+    session.telemetry.voice_interaction_count = (session.telemetry.voice_interaction_count || 0) + 1;
+    
+    // Update average dependency weight
+    const totalWeight = session.voiceInteractions.reduce((sum, v) => sum + (v.dependencyWeight || 0), 0);
+    session.telemetry.voice_dependency_weight_avg = totalWeight / session.voiceInteractions.length;
 
-    if (!response.success || !response.data) {
-      throw new Error('Failed to get mentor response');
+    // Track solution seeking specifically
+    if (intent === 'solution-seeking') {
+      const solutionSeekingCount = session.voiceInteractions.filter(v => v.intent === 'solution-seeking').length;
+      session.telemetry.voice_solution_ratio = solutionSeekingCount / (session.telemetry.voice_interaction_count || 1);
     }
 
-    const mentorResponse = response.data;
-
-    // Track voice usage
-    const tokensUsed = 100; // Estimate
-    const cost = tokensUsed * 0.0001;
-
-    // Update session cost governance
+    // 3. Update cost governance
+    const tokens = tokenUsage || 150;
+    const cost = tokens * 0.0001;
+    
     session.costGovernance.llmCallCount += 1;
-    session.llmUsageTokens.mentorTokens += tokensUsed;
-    session.llmUsageTokens.totalTokens += tokensUsed;
-    session.llmCostEstimate.mentorCost += cost;
-    session.llmCostEstimate.totalEstimatedCost += cost;
+    session.llmUsageTokens.totalTokens = (session.llmUsageTokens.totalTokens || 0) + tokens;
+    session.llmCostEstimate.totalEstimatedCost = (session.llmCostEstimate.totalEstimatedCost || 0) + cost;
 
-    // Track voice interaction intent
-    session.telemetry.voice_intents = session.telemetry.voice_intents || {};
-    session.telemetry.voice_intents[intent || 'help'] = 
-      (session.telemetry.voice_intents[intent || 'help'] || 0) + 1;
+    // 4. Recalculate dependency score
+    if (typeof session.computeDependencyScore === 'function') {
+      session.computeDependencyScore();
+    }
 
-    // Track voice dependency
-    session.dependencyScore.voiceDependency =
-      Math.min(1, (session.dependencyScore.voiceDependency || 0) + 0.05);
+    // 5. Log telemetry to AIObservabilityService
+    AIObservabilityService.logLLMCall('groq', '/voice-interact', tokens, cost, 0, true);
+    AIObservabilityService.logSessionCost(
+      session._id.toString(),
+      session.userId?.toString(),
+      'voice',
+      tokens,
+      cost
+    );
 
     session.lastActivityAt = new Date();
     await session.save();
 
-    // Log LLM call
-    AIObservabilityService.logLLMCall('groq', '/mentor/chat', tokensUsed, cost, 0, true);
-
-    logger.info(`✅ Mentor response: ${mentorResponse.response?.substring(0, 50)}...`);
-
-    return {
-      intent: mentorResponse.intent || intent,
-      response: mentorResponse.response || 'I understand. Keep coding!',
-      actionSuggested: mentorResponse.actionSuggested || 'continue',
-      voiceReady: true, // Indicates frontend should play TTS if available
-      metadata: {
-        tokensUsed,
-        cost,
-      },
-    };
+    logger.info(`✅ Voice interaction logged for session ${session._id} (Intent: ${intent})`);
+    
+    return session;
   } catch (error) {
-    logger.error(`❌ Error handling voice input: ${error.message}`);
+    logger.error(`❌ Error logging voice interaction: ${error.message}`);
+    throw error;
+  }
+}
+
+/**
+ * Handle voice input from user (Proxy to FastAPI /ai/lab/voice-interact)
+ */
+export async function handleVoiceInput(session, transcript, userCode = '', history = []) {
+  try {
+    logger.info(`🎤 Processing voice interact req: "${transcript.substring(0, 50)}..."`);
+
+    const voiceRequest = {
+      transcript,
+      userCode,
+      history,
+      problemContext: {
+        title: session.problemId || 'Unknown',
+        difficulty: session.difficulty || 'Medium',
+        description: session.problemStatement || '',
+        constraints: session.testCases?.length > 0 ? 'Refer to test cases' : 'N/A',
+        language: session.codeLanguage
+      }
+    };
+
+    // Note: The controller handles the streaming part for real-time response
+    // This service function can be used for non-streaming or internal calls
+    const response = await callAIEndpoint('/ai/lab/voice-interact', 'POST', voiceRequest);
+    return response;
+  } catch (error) {
+    logger.error(`❌ Error in voice input service: ${error.message}`);
     throw error;
   }
 }
@@ -595,4 +611,5 @@ export default {
   scoreExplanation,
   getSessionCostSummary,
   handleVoiceInput,
+  logVoiceInteraction,
 };

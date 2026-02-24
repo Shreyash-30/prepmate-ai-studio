@@ -76,14 +76,15 @@ class GeminiClient:
             },
         ]
 
-    async def generate_response(
+    async def generate_content(
         self,
         prompt: str,
+        system_prompt: str = "",
         temperature: float = 0.4,
         max_tokens: int = 2048,
         retry_count: int = 3,
         timeout: int = 30,
-        preferred_provider: Optional[str] = None,
+        provider: Optional[str] = None,
     ) -> str:
         """
         Generate response from Gemini or fallback providers with automatic failover
@@ -94,19 +95,20 @@ class GeminiClient:
             max_tokens: Maximum tokens in response
             retry_count: Number of retries on failure
             timeout: Timeout in seconds
-            preferred_provider: Optional preferred provider (gemini, groq, together)
+            provider: Optional preferred provider (gemini, groq, together)
 
         Returns:
             Generated response text, or fallback message if all APIs unavailable
         """
         # Use multi-provider router
-        result = await self.router.generate_response(
+        result = await self.router.generate_content(
             prompt=prompt,
+            system_prompt=system_prompt,
             temperature=temperature,
             max_tokens=max_tokens,
             retry_count=retry_count,
             timeout=timeout,
-            preferred_provider=preferred_provider or 'gemini'
+            provider=provider or 'gemini'
         )
 
         if result['success']:
@@ -178,7 +180,7 @@ class GeminiClient:
             logger.info("Falling back to non-streaming response...")
             
             # Fall back to non-streaming
-            result = await self.generate_response(prompt, temperature)
+            result = await self.generate_content(prompt=prompt, temperature=temperature)
             yield result
 
     async def generate_structured_response(
@@ -206,7 +208,7 @@ class GeminiClient:
 
         full_prompt = f"{prompt}\n\n{format_instruction}" if format_instruction else prompt
 
-        return await self.generate_response(prompt=full_prompt, temperature=temperature)
+        return await self.generate_content(prompt=full_prompt, temperature=temperature)
 
     def get_provider_health(self) -> dict:
         """Get health status of all LLM providers"""
@@ -244,7 +246,7 @@ async def initialize_gemini() -> None:
         
         # Test with multi-provider router
         if any(health['providers'].values()):
-            test_response = await client.generate_response(
+            test_response = await client.generate_content(
                 "Say 'LLM system is working' in exactly these words.",
                 temperature=0.0,
             )

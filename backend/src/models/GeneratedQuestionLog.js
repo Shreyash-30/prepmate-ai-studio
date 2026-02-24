@@ -30,7 +30,6 @@ const generatedQuestionLogSchema = new mongoose.Schema(
     problemId: {
       type: String,
       required: true,
-      unique: true,
       index: true,
       trim: true,
       lowercase: true,
@@ -145,6 +144,13 @@ const generatedQuestionLogSchema = new mongoose.Schema(
     description: {
       type: String,
       description: 'Complete problem statement',
+    },
+
+    // Administrative flags
+    isActive: {
+      type: Boolean,
+      default: true,
+      index: true,
     },
 
     // Schema version (for future upgrades)

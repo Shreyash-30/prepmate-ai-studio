@@ -40,6 +40,10 @@ const practiceSessionSchema = new mongoose.Schema(
       default: '',
       description: 'Full problem description/statement',
     },
+    constraints: {
+      type: [String],
+      default: [],
+    },
     sessionKey: {
       type: String,
       default: () => uuidv4(),
@@ -81,10 +85,29 @@ const practiceSessionSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
-    voice_transcript: {
-      type: String,
-      default: '',
-    },
+    voiceInteractions: [
+      {
+        transcript: String,
+        response: String,
+        intent: {
+          type: String,
+          enum: ['clarification', 'hint', 'solution-seeking', 'optimization', 'confusion', 'general'],
+          default: 'general',
+        },
+        dependencyWeight: {
+          type: Number,
+          default: 0,
+        },
+        tokenUsage: {
+          type: Number,
+          default: 0,
+        },
+        createdAt: {
+          type: Date,
+          default: Date.now,
+        },
+      }
+    ],
 
     // Test Cases (may be provided on session creation or fetched from problem)
     // For wrapped execution: { input: Object, expectedOutput: Object, visibility: String }
@@ -322,6 +345,14 @@ const practiceSessionSchema = new mongoose.Schema(
         type: Number,
         default: 0,
       },
+      voice_interaction_count: {
+        type: Number,
+        default: 0,
+      },
+      voice_dependency_weight_avg: {
+        type: Number,
+        default: 0,
+      },
       voice_solution_ratio: {
         type: Number,
         default: 0,
@@ -463,11 +494,16 @@ practiceSessionSchema.methods.addHint = function (level, text, tokensUsed, cost)
  */
 practiceSessionSchema.methods.computeDependencyScore = function () {
   const hintDependency = (Math.min(this.telemetry.hint_levels_used || 0, 4) / 4) * 0.5;
-  const voiceDependency = (this.telemetry.voice_solution_ratio || 0) * 0.3;
-  const retryRate = this.telemetry.retry_count > 0 ? Math.min(this.telemetry.retry_count / 10, 1) : 0;
-  const retryDependency = retryRate * 0.2;
+  
+  // Voice dependency: influenced by average weight of voice interactions
+  const voiceWeight = this.telemetry.voice_dependency_weight_avg || 0;
+  const voiceFrequency = Math.min((this.telemetry.voice_interaction_count || 0) / 10, 1);
+  const voiceDependency = (voiceWeight * 0.7 + (this.telemetry.voice_solution_ratio || 0) * 0.3) * voiceFrequency * 0.4;
 
-  const totalDependencyScore = hintDependency + voiceDependency + retryDependency;
+  const retryRate = this.telemetry.retry_count > 0 ? Math.min(this.telemetry.retry_count / 10, 1) : 0;
+  const retryDependency = retryRate * 0.1;
+
+  const totalDependencyScore = Math.min(1.0, hintDependency + voiceDependency + retryDependency);
   const independenceScore = Math.max(0, Math.min(1, 1 - totalDependencyScore));
 
   this.dependencyScore = {

@@ -132,8 +132,14 @@ class TelemetryFeatures:
             max_hint_level = max((max((h.get("level", 0) for h in hints), default=0) for hints in hint_data), default=0)
             
             # Voice usage
-            voice_transcripts = [s.get("voice_transcript") for s in sessions if s.get("voice_transcript")]
-            voice_usage_ratio = len(voice_transcripts) / attempt_count if attempt_count > 0 else 0
+            voice_interactions = [s.get("voiceInteractions", []) for s in sessions]
+            total_voice_interactions = sum(len(v) for v in voice_interactions)
+            voice_usage_ratio = total_voice_interactions / attempt_count if attempt_count > 0 else 0
+            
+            # Voice solution seeking count
+            solution_seeking_count = sum(1 for session_voices in voice_interactions 
+                                       for v in session_voices 
+                                       if v.get("intent") == "solution-seeking")
             
             return {
                 "attempt_count": attempt_count,
@@ -149,6 +155,8 @@ class TelemetryFeatures:
                 "retry_dependency": avg_retry_dependency,
                 "explanation_quality": avg_explanation_quality,
                 "voice_usage_ratio": voice_usage_ratio,
+                "total_voice_interactions": total_voice_interactions,
+                "voice_solution_seeking_count": solution_seeking_count,
                 "consistency_score": consistency,
                 "engagement": min(1.0, attempt_count / 100.0),
             }

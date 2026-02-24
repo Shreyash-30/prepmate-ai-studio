@@ -11,6 +11,14 @@ import auth from '../middleware/auth.js';
 import jwt from 'jsonwebtoken';
 import { executionRateLimit, submissionRateLimit } from '../middleware/rateLimitMiddleware.js';
 import { enforceWrappedExecutionMiddleware } from '../middleware/wrappedExecutionEnforcement.js';
+import multer from 'multer';
+
+// Storage for voice audio files (temp)
+const upload = multer({ 
+  limits: { 
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  }
+});
 
 const router = express.Router();
 
@@ -77,6 +85,12 @@ router.post('/submit', optionalAuth, submissionRateLimit, practiceController.sub
  * Auth: Optional (session ownership is checked in controller)
  */
 router.post('/voice/:sessionId', optionalAuth, practiceController.handleVoiceInteraction);
+
+/**
+ * POST /api/practice/voice/transcribe/:sessionId
+ * Transcribe audio file to text using Groq Whisper
+ */
+router.post('/voice/transcribe/:sessionId', optionalAuth, upload.single('audio'), practiceController.transcribeVoice);
 
 /**
  * POST /api/practice/score-explanation/:sessionId

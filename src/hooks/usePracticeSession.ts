@@ -60,7 +60,7 @@ export interface SubmissionResult {
 }
 
 export interface StreamingMessage {
-  type: 'hint' | 'review' | 'inline_assist' | 'explanation_score' | 'error';
+  type: 'hint' | 'review' | 'inline_assist' | 'explanation_score' | 'error' | 'chunk';
   content: string;
   metadata?: Record<string, any>;
 }

@@ -10,7 +10,7 @@
 ## Executive Summary
 
 PrepMate AI Studio is a complete, production-ready adaptive interview preparation platform with:
-- ✅ Secure sandboxed code execution
+- ✅ Secure Judge0 (RapidAPI) code execution
 - ✅ Streaming AI assistance (hints, reviews, suggestions)
 - ✅ Non-blocking frontend architecture
 - ✅ Full ML pipeline for mastery tracking
@@ -67,13 +67,12 @@ PrepMate AI Studio is a complete, production-ready adaptive interview preparatio
   - Dead-letter queue for failed jobs
   - Job status tracking
 
-- **Docker Sandbox Judge**
-  - Isolated container execution
-  - 2-second time limit
-  - 256MB memory limit
-  - No network access
-  - Filesystem isolation
-  - Language support: Python, JavaScript, Java (extensible)
+- **Judge0 API Engine (RapidAPI)**
+  - Production-grade Judge0 integration
+  - RapidAPI authentication headers
+  - Language mapping (Python, JS, Java, etc)
+  - Batch test case execution
+  - Structured LeetCode-style judging
 
 - **Observability Service**
   - Logs all LLM calls
@@ -92,7 +91,7 @@ backend/
       ✅ UserTopicProgression.js
     services/
       ✅ practiceSessionService.js (360+ lines)
-      ✅ DockerSandboxJudge.js
+      ✅ judge0Service.js
       ✅ JobQueueService.js
       ✅ AIObservabilityService.js
     config/
@@ -496,7 +495,7 @@ ai-services/
 ## Architecture Verification Checklist
 
 ### Foundation (Phase 1)
-- ✅ Docker sandbox operational
+- ✅ Judge0 API Engine operational
 - ✅ Redis + BullMQ working
 - ✅ PracticeSession model complete
 - ✅ Idempotency keys verified

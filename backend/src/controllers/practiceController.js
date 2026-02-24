@@ -20,6 +20,8 @@ import PracticeSession from '../models/PracticeSession.js';
 import logger from '../utils/logger.js';
 import { validateQuestionForPractice, logLegacyAccessAttempt, onlyWrappedQuestionsFilter } from '../middleware/wrappedExecutionEnforcement.js';
 import jwt from 'jsonwebtoken';
+import FormData from 'form-data';
+import AIObservabilityService from '../services/AIObservabilityService.js';
 
 /**
  * GET /api/practice/topics
@@ -423,9 +425,41 @@ export const getQuestion = async (req, res) => {
   try {
     const { problemId } = req.params;
 
-    const question = await questionFetchService.getOrFetchQuestion(problemId);
+    // Step 1: Check GeneratedQuestionLog first (AI questions)
+    const { default: GeneratedQuestionLog } = await import('../models/GeneratedQuestionLog.js');
+    let question = await GeneratedQuestionLog.findOne({ problemId }).lean();
 
-    if (!question) {
+    // Step 2: If found in GeneratedQuestionLog, map to consistent format for frontend
+    if (question) {
+      // Map to consistent structure
+      const mappedQuestion = {
+        problemId: question.problemId,
+        problemTitle: question.problemTitle,
+        title: question.problemTitle,
+        difficulty: question.difficulty,
+        description: question.description || question.whyRecommended,
+        content: question.description || question.whyRecommended,
+        constraints: question.constraints,
+        hints: question.hints || [],
+        starterCode: question.starterCode,
+        wrapperTemplate: question.wrapperTemplate,
+        testCases: question.testCasesStructured || [],
+        schemaVersion: question.schemaVersion || 2,
+        topic: question.topic || question.topicId,
+        topicId: question.topicId || question.topic,
+        source: 'llm',
+      };
+      
+      return res.status(200).json({
+        success: true,
+        data: mappedQuestion,
+      });
+    }
+
+    // Step 3: Fallback to QuestionFetchService (Static/LeetCode questions)
+    const staticQuestion = await questionFetchService.getOrFetchQuestion(problemId);
+
+    if (!staticQuestion) {
       return res.status(404).json({
         success: false,
         message: 'Question not found',
@@ -434,7 +468,7 @@ export const getQuestion = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: question,
+      data: staticQuestion,
     });
   } catch (error) {
     logger.error('Error getting question:', error);
@@ -630,8 +664,9 @@ export const startSession = async (req, res) => {
       if (sourceQuestion) {
         const errors = validateQuestionForPractice(sourceQuestion);
         if (errors.length > 0) {
+          const qTitle = sourceQuestion.title || sourceQuestion.problemTitle || sourceQuestion.problemId;
           logger.error(`❌ PHASE 9 HARD FAIL: Question failed v2 validation`);
-          logger.error(`   Question: ${sourceQuestion.title}`);
+          logger.error(`   Question: ${qTitle}`);
           logger.error(`   Errors: ${errors.join(', ')}`);
           sourceQuestion = null; // Reject invalid question
         }
@@ -656,19 +691,11 @@ export const startSession = async (req, res) => {
     // ✅ POPULATE WRAPPED EXECUTION FIELDS FROM SOURCE QUESTION
     if (sourceQuestion) {
       // For NEW wrapped format (schemaVersion 2): Copy ALL fields, NEVER stringify testCases
-      if (sourceQuestion.schemaVersion === 2 && sourceQuestion.wrapperTemplate) {
+      if (sourceQuestion.schemaVersion === 2) {
         logger.info(`  → Populating wrapped execution fields (schemaVersion: 2)`);
-        
-        // Validate required wrapped fields
-        if (!sourceQuestion.wrapperTemplate) {
-          throw new Error('Source question missing wrapperTemplate - cannot create wrapped session');
-        }
         
         // Handle both testCasesStructured (from either QuestionBank or GeneratedQuestionLog)
         const testCasesField = sourceQuestion.testCasesStructured || sourceQuestion.testCases || [];
-        if (!testCasesField || testCasesField.length === 0) {
-          throw new Error('Source question missing testCasesStructured - cannot create wrapped session');
-        }
         
         session.wrapperTemplate = sourceQuestion.wrapperTemplate;
         session.starterCode = sourceQuestion.starterCode;
@@ -676,28 +703,35 @@ export const startSession = async (req, res) => {
         session.schemaVersion = 2;
         session.isLegacy = false;
         
-        // ✅ CRITICAL: Keep testCases as OBJECTS, never stringify!
-        // testCasesStructured from LLM already has: { input: {...}, expectedOutput: {...}, visibility: 'public'|'hidden' }
-        session.testCases = testCasesField.map((tc) => ({
-          input: tc.input,  // Keep as object! Do NOT stringify
+        // ✅ CRITICAL: Map test cases with BOTH output and expectedOutput for frontend compatibility
+        session.testCases = (testCasesField || []).map((tc) => ({
+          input: tc.input,  // Keep as object!
           expectedOutput: tc.expectedOutput || tc.output,  // Keep as object!
+          output: tc.output || tc.expectedOutput,         // Alias for frontend
           visibility: tc.visibility || 'public',
         }));
         
         // ✅ ADD: Store problem metadata for AI service requests
         session.difficulty = sourceQuestion.difficulty || 'Medium';
         session.problemStatement = sourceQuestion.content || sourceQuestion.description || sourceQuestion.problemTitle || '';
+        session.constraints = sourceQuestion.constraints || [];
         
-        logger.info(`  → ✅ Loaded ${session.testCases.length} structured test cases (wrapped format)`);
-        logger.info(`  → Difficulty: ${session.difficulty}, Problem statement: ${session.problemStatement.substring(0, 50)}...`);
+        logger.info(`  → ✅ Loaded ${session.testCases.length} test cases`);
       } else {
         // ❌ HARD FAIL: Only schemaVersion 2 (wrapped execution) supported
         logger.error(`❌ HARD FAIL: Question has unsupported schemaVersion: ${sourceQuestion.schemaVersion || 'undefined'}`);
-        throw new Error(`Only schemaVersion 2 (wrapped execution) is supported. Problem: ${problemId} has version ${sourceQuestion.schemaVersion || 'undefined'}`);
+        return res.status(400).json({
+          success: false,
+          message: `Only schemaVersion 2 (wrapped execution) is supported. Problem: ${problemId} has version ${sourceQuestion.schemaVersion || 'undefined'}`
+        });
       }
     } else {
       // ❌ HARD FAIL: No source question found
-      throw new Error(`Question not found: ${problemId}. Cannot create session without a valid wrapped problem.`);
+      logger.error(`❌ Question "${problemId}" not found for user ${userId}`);
+      return res.status(404).json({
+        success: false,
+        message: `Question not found: ${problemId}. Cannot create session without a valid problem.`,
+      });
     }
 
     await session.save();
@@ -764,12 +798,12 @@ export const startSession = async (req, res) => {
 export const submitPractice = async (req, res) => {
   try {
     const { sessionId, code, explanation = '', voiceTranscript = '', idempotencyKey } = req.body;
-    const userId = req.user ? req.user._id : null;
+    const userId = req.user ? (req.user._id || req.user.id) : req.body.userId; // Support demo users
 
     if (!userId) {
       return res.status(401).json({
         success: false,
-        message: 'Authentication required for submission',
+        message: 'Authentication or userId required for submission',
       });
     }
 
@@ -1166,8 +1200,8 @@ export const getSession = async (req, res) => {
       executionMode: session.schemaVersion === 2 ? 'wrapped' : 'legacy',
       
       // Problem metadata from source question
-      problemTitle: sourceQuestion?.title ||  'Problem',
-      problemDescription: sourceQuestion?.content || session.problemStatement || '',
+      problemTitle: sourceQuestion?.title || sourceQuestion?.problemTitle || 'Problem',
+      problemDescription: sourceQuestion?.content || sourceQuestion?.description || session.problemStatement || '',
       constraints: sourceQuestion?.constraints || '',
       hints: sourceQuestion?.hints || [],
       
@@ -1178,8 +1212,15 @@ export const getSession = async (req, res) => {
       
       // Test cases - return as-is from session (already proper format)
       // Session stores them correctly from startSession
-      testCases: session.testCases && session.testCases.length > 0 
-        ? session.testCases 
+      testCases: (session.testCases && session.testCases.length > 0) 
+        ? session.testCases.map(tc => {
+            const plainTC = tc.toObject ? tc.toObject() : tc;
+            return {
+              ...plainTC,
+              output: plainTC.output || plainTC.expectedOutput,
+              expectedOutput: plainTC.expectedOutput || plainTC.output
+            };
+          }) 
         : [],
 
       costRemaining: {
@@ -1967,85 +2008,210 @@ export const runCode = async (req, res) => {
  *   "voiceReady": true  // Indicates if TTS should be played
  * }
  */
+/**
+ * POST /api/practice/voice/:sessionId
+ * Process voice input and interact with mentor (Streaming)
+ */
 export const handleVoiceInteraction = async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const { transcript, intent, context } = req.body;
-    const userId = req.user ? req.user._id : null;
+    const { transcript, userCode, history } = req.body;
+    const userId = req.user ? (req.user._id || req.user.id) : null;
 
     if (!transcript || !transcript.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Transcript is required',
-      });
+      return res.status(400).json({ success: false, message: 'Transcript is required' });
     }
 
-    // Get session
     const session = await PracticeSession.findById(sessionId);
     if (!session) {
-      return res.status(404).json({
-        success: false,
-        message: 'Practice session not found',
-      });
+      return res.status(404).json({ success: false, message: 'Session not found' });
     }
 
-    // Verify ownership
     if (userId && session.userId.toString() !== userId.toString()) {
-      return res.status(403).json({
-        success: false,
-        message: 'Unauthorized',
-      });
+      return res.status(403).json({ success: false, message: 'Unauthorized' });
     }
 
-    logger.info(`🎤 Voice interaction for session ${sessionId}: "${transcript.substring(0, 50)}..."`);
-
-    // Check cost governance
     if (!session.canMakeLLMCall()) {
-      return res.status(429).json({
-        success: false,
-        message: 'LLM call limit reached',
-      });
+      return res.status(429).json({ success: false, message: 'LLM call limit reached' });
     }
 
-    // Call AI mentor service to classify intent and respond
-    import('../services/practiceSessionService.js').then(async (module) => {
-      try {
-        const voiceResponse = await module.default.handleVoiceInput(
-          session,
+    // Set SSE headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    logger.info(`🎤 Voice interaction starting for session ${sessionId}`);
+
+    const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8001';
+    
+    let intentInfo = { intent: 'general', dependencyWeight: 0 };
+    let fullResponse = '';
+    let buffer = '';
+    try {
+      const response = await axios({
+        method: 'post',
+        url: `${AI_SERVICE_URL}/ai/lab/voice-interact`,
+        data: {
           transcript,
-          intent,
-          context
-        );
+          userCode: userCode || session.code || '',
+          history: history || [],
+          problemContext: {
+            title: session.problemId,
+            difficulty: session.difficulty,
+            description: session.description || session.problemStatement,
+            language: session.codeLanguage,
+            submissionResult: session.submissionResult || null,
+            testCasesPassed: session.submissionResult?.passedTests || 0,
+            totalTestCases: session.submissionResult?.totalTests || 0,
+            lastVerdict: session.submissionResult?.verdict || null,
+            constraints: session.constraints || [],
+            starterCode: session.starterCode || null,
+            functionMetadata: session.functionMetadata || null
+          }
+        },
+        responseType: 'stream'
+      });
 
-        // Track voice usage
-        session.telemetry.voice_solution_ratio =
-          (session.telemetry.voice_solution_ratio || 0) + 0.1;
-        session.dependencyScore.voiceDependency =
-          Math.min(1, (session.dependencyScore.voiceDependency || 0) + 0.05);
-        session.lastActivityAt = new Date();
-        await session.save().catch((err) => {
-          logger.warn('Failed to update session:', err.message);
-        });
+      logger.info(`🔗 Connected to AI Service for voice, starting stream for session ${sessionId}`);
 
-        res.status(200).json({
-          success: true,
-          data: voiceResponse,
-        });
-      } catch (error) {
-        logger.error('Error processing voice input:', error);
-        res.status(500).json({
-          success: false,
-          message: 'Failed to process voice input',
-          error: error.message,
-        });
-      }
-    });
+      response.data.on('data', async (chunk) => {
+        const rawChunk = chunk.toString();
+        logger.debug(`[Voice] Received chunk: ${rawChunk.substring(0, 50)}...`);
+        buffer += rawChunk;
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          if (line.trim() === '') continue;
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.substring(6));
+              logger.debug(`[Voice] Parsed message type: ${data.type || 'unknown'}`);
+              if (data.type === 'intent') {
+                intentInfo = data.data;
+                logger.info(`[Voice] Intent detected: ${intentInfo.intent}`);
+              } else if (data.content) {
+                fullResponse += data.content;
+              } else if (data.type === 'error') {
+                logger.error(`[Voice] AI Service returned error: ${data.message}`);
+              }
+              res.write(line + '\n\n');
+            } catch (e) {
+              logger.warn(`[Voice] Failed to parse SSE line: ${line.substring(0, 50)}...`);
+            }
+          }
+        }
+      });
+
+      response.data.on('end', async () => {
+        logger.info(`🏁 Voice stream completed for session ${sessionId}. Response length: ${fullResponse.length}`);
+        // Handle any remaining data in buffer
+        if (buffer.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(buffer.substring(6));
+            if (data.type === 'intent') intentInfo = data.data;
+            else if (data.content) fullResponse += data.content;
+            res.write(buffer + '\n\n');
+          } catch (e) {}
+        }
+
+        // Log interaction and update telemetry
+        try {
+          await practiceSessionService.logVoiceInteraction(session, {
+            transcript,
+            response: fullResponse,
+            intent: intentInfo.intent,
+            dependencyWeight: intentInfo.dependencyWeight,
+            tokenUsage: 150 // Estimate
+          });
+        } catch (err) {
+          logger.error('Error post-processing voice interaction:', err);
+        }
+        res.end();
+      });
+
+    } catch (apiError) {
+      logger.error('AI Service Error (Voice):', apiError.message);
+      res.write(`data: ${JSON.stringify({ type: 'error', message: 'Voice service unavailable' })}\n\n`);
+      res.end();
+    }
+
   } catch (error) {
     logger.error('Error in handleVoiceInteraction:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, message: 'Voice interaction failed' });
+    } else {
+      res.end();
+    }
+  }
+};
+
+/**
+ * POST /api/practice/voice/transcribe/:sessionId
+ * Transcribe audio blob to text using Groq Whisper
+ */
+export const transcribeVoice = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const audioFile = req.file;
+
+    if (!audioFile) {
+      return res.status(400).json({ success: false, message: 'Audio file is required' });
+    }
+
+    const session = await PracticeSession.findById(sessionId);
+    if (!session) {
+      return res.status(404).json({ success: false, message: 'Session not found' });
+    }
+
+    // Check cost governance (transcription also counts as LLM usage)
+    if (!session.canMakeLLMCall()) {
+      return res.status(429).json({ success: false, message: 'LLM call limit reached' });
+    }
+
+    logger.info(`🎙️ Transcribing audio for session ${sessionId} (${audioFile.size} bytes)`);
+
+    const formData = new FormData();
+    formData.append('file', audioFile.buffer, {
+      filename: 'audio.webm',
+      contentType: audioFile.mimetype,
+    });
+    formData.append('model', process.env.VOICE_STT_MODEL || 'whisper-large-v3');
+
+    logger.info(`🎙️ Sending to Groq Whisper: ${audioFile.size} bytes, model: ${process.env.VOICE_STT_MODEL || 'whisper-large-v3'}`);
+    
+    let groqResponse;
+    try {
+      groqResponse = await axios.post('https://api.groq.com/openai/v1/audio/transcriptions', formData, {
+        headers: {
+          ...formData.getHeaders(),
+          'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+        }
+      });
+    } catch (axiosError) {
+      const errorData = axiosError.response?.data;
+      logger.error('Groq Whisper API Error:', {
+        status: axiosError.response?.status,
+        data: errorData,
+        message: axiosError.message
+      });
+      throw new Error(errorData?.error?.message || axiosError.message);
+    }
+
+    const transcript = groqResponse.data.text;
+    logger.info(`📝 Transcription successful: "${transcript.substring(0, 50)}..."`);
+
+    res.status(200).json({
+      success: true,
+      data: { transcript }
+    });
+
+  } catch (error) {
+    logger.error('Transcription Error:', error.response?.data || error.message);
     res.status(500).json({
       success: false,
-      message: 'Failed to handle voice interaction',
-      error: error.message,
+      message: 'Failed to transcribe audio',
+      error: error.response?.data?.error?.message || error.message
     });
   }
 };

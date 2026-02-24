@@ -84,7 +84,7 @@ class PracticeReviewService:
                 topic=request.topic,
             )
 
-            review_text = await self.gemini.generate_response(
+            review_text = await self.gemini.generate_content(
                 prompt=prompt,
                 temperature=0.4,
                 max_tokens=2000,
@@ -182,7 +182,7 @@ Provide:
 
 Format your response with clear sections."""
 
-            comparison = await self.gemini.generate_response(
+            comparison = await self.gemini.generate_content(
                 prompt=prompt,
                 temperature=0.4,
                 max_tokens=1500,
@@ -228,7 +228,7 @@ Difficulty: [Easy/Medium/Hard to implement]
 Repeat for each optimization.
 Focus on practical, implementable improvements."""
 
-            response = await self.gemini.generate_response(
+            response = await self.gemini.generate_content(
                 prompt=prompt,
                 temperature=0.5,
                 max_tokens=1500,

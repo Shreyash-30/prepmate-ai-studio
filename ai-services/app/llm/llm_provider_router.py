@@ -124,14 +124,15 @@ class LLMProviderRouter:
             {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_LOW_AND_ABOVE"},
         ]
 
-    async def generate_response(
+    async def generate_content(
         self,
         prompt: str,
+        system_prompt: str = "",
         temperature: float = 0.4,
         max_tokens: int = 2048,
-        retry_count: int = 3,
-        timeout: int = 30,
-        preferred_provider: Optional[str] = None,
+        retry_count: int = 2,
+        timeout: int = 20,
+        provider: Optional[str] = None,
     ) -> dict:
         """
         Generate response from LLM with automatic failover
@@ -142,7 +143,7 @@ class LLMProviderRouter:
             max_tokens: Max response tokens
             retry_count: Number of retries per provider
             timeout: Timeout in seconds
-            preferred_provider: Preferred provider name (gemini, groq, together)
+            provider: Optional preferred provider (gemini, groq, together)
 
         Returns:
             {
@@ -154,7 +155,7 @@ class LLMProviderRouter:
             }
         """
         import time
-        providers_to_try = self._get_provider_order(preferred_provider)
+        providers_to_try = self._get_provider_order(provider)
 
         for provider_name in providers_to_try:
             if provider_name not in self.providers or not self.providers[provider_name]:
@@ -172,15 +173,15 @@ class LLMProviderRouter:
             try:
                 if provider_name == 'gemini':
                     response = await self._call_gemini(
-                        prompt, temperature, max_tokens, retry_count, timeout
+                        prompt, system_prompt, temperature, max_tokens, retry_count, timeout
                     )
                 elif provider_name == 'groq':
                     response = await self._call_groq(
-                        prompt, temperature, max_tokens, retry_count, timeout
+                        prompt, system_prompt, temperature, max_tokens, retry_count, timeout
                     )
                 elif provider_name == 'together':
                     response = await self._call_together(
-                        prompt, temperature, max_tokens, retry_count, timeout
+                        prompt, system_prompt, temperature, max_tokens, retry_count, timeout
                     )
                 else:
                     continue
@@ -243,9 +244,18 @@ class LLMProviderRouter:
         }
 
     async def _call_gemini(
-        self, prompt: str, temperature: float, max_tokens: int, retry_count: int, timeout: int
+        self, prompt: str, system_prompt: str, temperature: float, max_tokens: int, retry_count: int, timeout: int
     ) -> str:
         """Call Gemini API"""
+        # For Gemini 2.x, we should ideally use the system_instruction in GenerativeModel constructor,
+        # but since the model is pre-initialized, we'll prepend it to the prompt or use a special chat object.
+        # Alternatively, we can re-initialize if system_prompt changes, but that's expensive.
+        # Let's use a simpler approach: if system_prompt exists, combine it.
+        
+        full_prompt = prompt
+        if system_prompt:
+            full_prompt = f"{system_prompt}\n\nUser: {prompt}"
+            
         model = self.providers['gemini']
         for attempt in range(retry_count):
             try:
@@ -255,7 +265,7 @@ class LLMProviderRouter:
                     loop.run_in_executor(
                         None,
                         lambda: model.generate_content(
-                            prompt,
+                            full_prompt,
                             generation_config=genai.types.GenerationConfig(
                                 temperature=temperature,
                                 max_output_tokens=max_tokens,
@@ -287,7 +297,7 @@ class LLMProviderRouter:
                 raise
 
     async def _call_groq(
-        self, prompt: str, temperature: float, max_tokens: int, retry_count: int, timeout: int
+        self, prompt: str, system_prompt: str, temperature: float, max_tokens: int, retry_count: int, timeout: int
     ) -> str:
         """Call Groq API - Uses llama-3.3-70b-versatile with fallback to 8b-instant"""
         try:
@@ -302,13 +312,19 @@ class LLMProviderRouter:
             for attempt in range(retry_count):
                 try:
                     logger.info(f"💾 Groq: Trying model {model_name} (attempt {attempt+1})")
+                    
+                    messages = []
+                    if system_prompt:
+                        messages.append({"role": "system", "content": system_prompt})
+                    messages.append({"role": "user", "content": prompt})
+                    
                     loop = asyncio.get_event_loop()
                     response = await asyncio.wait_for(
                         loop.run_in_executor(
                             None,
                             lambda: self.groq_client.chat.completions.create(
                                 model=model_name,
-                                messages=[{"role": "user", "content": prompt}],
+                                messages=messages,
                                 temperature=temperature,
                                 max_tokens=min(max_tokens, 8192),
                                 top_p=0.95,
@@ -358,11 +374,11 @@ class LLMProviderRouter:
         
         Uses 128k context window for flexibility
         """
-        result = await self.generate_response(
+        result = await self.generate_content(
             prompt=prompt,
             temperature=temperature,
             max_tokens=min(max_tokens, 4096),  # Llama-3.1-8B has 128k context
-            preferred_provider='groq',
+            provider='groq',
         )
         
         # Log that fast model was used
@@ -385,11 +401,11 @@ class LLMProviderRouter:
         
         Successor to older llama3-70b-8192 - recommended for production
         """
-        result = await self.generate_response(
+        result = await self.generate_content(
             prompt=prompt,
             temperature=temperature,
             max_tokens=min(max_tokens, 8192),
-            preferred_provider='groq',
+            provider='groq',
         )
         
         if result.get('provider') == 'groq':
@@ -398,10 +414,14 @@ class LLMProviderRouter:
         return result
 
     async def _call_together(
-        self, prompt: str, temperature: float, max_tokens: int, retry_count: int, timeout: int
+        self, prompt: str, system_prompt: str, temperature: float, max_tokens: int, retry_count: int, timeout: int
     ) -> str:
         """Call Together AI API"""
         import together
+
+        full_prompt = prompt
+        if system_prompt:
+            full_prompt = f"{system_prompt}\n\nUser: {prompt}"
 
         for attempt in range(retry_count):
             try:
@@ -410,7 +430,7 @@ class LLMProviderRouter:
                     loop.run_in_executor(
                         None,
                         lambda: together.Complete.create(
-                            prompt=prompt,
+                            prompt=full_prompt,
                             model="meta-llama/Llama-3-70b-chat-hf",
                             max_tokens=max_tokens,
                             temperature=temperature,
@@ -437,6 +457,66 @@ class LLMProviderRouter:
                     await asyncio.sleep(2 ** attempt)
                     continue
                 raise
+
+    async def generate_content_stream(
+        self,
+        prompt: str,
+        system_prompt: str = "",
+        temperature: float = 0.4,
+        max_tokens: int = 1024,
+        provider: str = "groq",
+        model: str = "llama-3.1-8b-instant"
+    ):
+        """
+        Stream content from LLM (optimized for voice/chat)
+        Currently only supports Groq for low-latency streaming
+        """
+        if provider == "groq" and self.groq_client:
+            async for chunk in self._stream_groq(
+                prompt, system_prompt, temperature, max_tokens, model
+            ):
+                yield chunk
+        else:
+            # Fallback to non-streaming or other provider if needed
+            # For now, voice service expects a stream
+            logger.warning(f"Streaming not fully implemented for {provider}. Using Groq fallback.")
+            if self.groq_client:
+                async for chunk in self._stream_groq(
+                    prompt, system_prompt, temperature, max_tokens, "llama-3.1-8b-instant"
+                ):
+                    yield chunk
+
+    async def _stream_groq(self, prompt, system_prompt, temperature, max_tokens, model_name):
+        """Internal helper for Groq streaming"""
+        try:
+            full_prompt = []
+            if system_prompt:
+                full_prompt.append({"role": "system", "content": system_prompt})
+            full_prompt.append({"role": "user", "content": prompt})
+
+            # Groq Python SDK is synchronous for completion.create, 
+            # we use run_in_executor to keep it async friendly.
+            # But for streaming, we need the generator.
+            
+            def get_stream():
+                return self.groq_client.chat.completions.create(
+                    model=model_name,
+                    messages=full_prompt,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    stream=True,
+                )
+
+            loop = asyncio.get_event_loop()
+            stream = await loop.run_in_executor(None, get_stream)
+
+            for chunk in stream:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    yield {"type": "chunk", "content": chunk.choices[0].delta.content}
+
+        except Exception as e:
+            logger.error(f"Groq streaming error: {e}")
+            yield {"type": "error", "message": str(e)}
 
     def _get_provider_order(self, preferred: Optional[str] = None) -> List[str]:
         """Get provider order with preferred first"""
