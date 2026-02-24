@@ -162,7 +162,7 @@ class EnhancedSubmissionProcessor {
 
               // Update the ML service's native tracking collection (used by dashboard)
               await TopicMastery.findOneAndUpdate(
-                { userId: submission.userId, topicId: submission.primaryTopicId || 'misc' },
+                { userId: submission.userId.toString(), topicId: submission.primaryTopicId || 'misc' },
                 {
                   $set: {
                     mastery_probability: data.mastery_probability,
@@ -206,13 +206,19 @@ class EnhancedSubmissionProcessor {
           }).then(async (response) => {
             if (response.data?.success && response.data?.data) {
               const data = response.data.data;
-              await ReadinessScore.create({
-                userId: submission.userId,
-                readinessScore: data.readiness_score,
-                targetCompany: data.target_company,
-                probability: data.probability,
-                confidence: data.confidence
-              });
+              await ReadinessScore.findOneAndUpdate(
+                { userId: submission.userId.toString(), targetCompany: data.target_company || 'general' },
+                {
+                  $set: {
+                    readinessScore: data.readiness_score,
+                    targetCompany: data.target_company || 'general',
+                    probability: data.probability_passing,
+                    confidence: data.confidence_score,
+                    lastEvaluatedAt: new Date()
+                  }
+                },
+                { upsert: true, new: true }
+              );
             }
             return response;
           });

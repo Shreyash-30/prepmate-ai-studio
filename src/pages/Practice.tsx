@@ -45,14 +45,7 @@ export default function Practice() {
 
   const getSubjectStats = (subjectId: string) => {
     if (!recommendations || recommendations.length === 0) {
-      const dummyMapping: Record<string, { modules: number, completion: number }> = {
-        'dsa': { modules: 32, completion: 45 },
-        'os': { modules: 12, completion: 20 },
-        'dbms': { modules: 15, completion: 35 },
-        'networks': { modules: 10, completion: 15 },
-        'system-design': { modules: 8, completion: 10 }
-      };
-      return dummyMapping[subjectId] || { modules: 10, completion: 0 };
+      return { modules: 0, completion: 0 };
     }
     const relevantRecs = recommendations.filter(r => (r.topic?.category || 'dsa') === subjectId);
     const modules = relevantRecs.length;
@@ -77,7 +70,7 @@ export default function Practice() {
     mastered: recommendations.filter(r => (r.masteryScore || 0) >= 0.8).length,
     practicing: recommendations.filter(r => 0.4 <= (r.masteryScore || 0) && (r.masteryScore || 0) < 0.8).length,
     needHelp: recommendations.filter(r => (r.masteryScore || 0) < 0.4).length,
-  } : { totalTopics: 24, mastered: 12, practicing: 8, needHelp: 4 };
+  } : { totalTopics: 0, mastered: 0, practicing: 0, needHelp: 0 };
 
   if (recommendationsError && !recommendations) {
     return (

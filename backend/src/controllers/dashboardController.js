@@ -82,11 +82,23 @@ export const getStats = async (req, res) => {
       const rawScore = latestReadiness.readinessScore || 0;
       readinessScore = rawScore <= 1.0 ? Math.round(rawScore * 100) : Math.round(rawScore);
     } else {
-      // Estimate readiness from all topic progressions (each is 0-1)
-      const topicProgressions = await UserTopicProgression.find({ userId }).lean();
-      if (topicProgressions.length > 0) {
-        const avgReadiness = topicProgressions.reduce((sum, p) => sum + (p.progressionReadinessScore || 0), 0) / topicProgressions.length;
-        readinessScore = Math.round(Math.min(avgReadiness, 1.0) * 100);
+      // Fallback 1: Estimate from TopicMastery (ML Intelligence Layer)
+      const mlMasteryDocs = await TopicMastery.find({ userId: String(userId) }).lean();
+      if (mlMasteryDocs.length > 0) {
+        // Readiness is a factor of both mastery and confidence
+        const totalReadiness = mlMasteryDocs.reduce((sum, m) => {
+          const mastery = m.mastery_probability || 0;
+          const confidence = m.confidence_score || 0.5;
+          return sum + (mastery * 0.7 + confidence * 0.3);
+        }, 0);
+        readinessScore = Math.round((totalReadiness / mlMasteryDocs.length) * 100);
+      } else {
+        // Fallback 2: Estimate from UserTopicProgression (DB Layer)
+        const topicProgressions = await UserTopicProgression.find({ userId }).lean();
+        if (topicProgressions.length > 0) {
+          const avgReadiness = topicProgressions.reduce((sum, p) => sum + (p.progressionReadinessScore || 0), 0) / topicProgressions.length;
+          readinessScore = Math.round(Math.min(avgReadiness, 1.0) * 100);
+        }
       }
     }
     // Final safety cap
@@ -152,16 +164,15 @@ export const getStats = async (req, res) => {
       createdAt: { $gte: sevenDaysAgo }
     });
 
-    // FALLBACKS - Use dummy values if real metrics are insufficient
-    // This provides a populated state for new accounts while real data accumulates
+    // FALLBACKS - Real data only
     const finalStats = {
-      problemsSolved: problemsSolved || DUMMY_STATS.problemsSolved,
-      readinessScore: readinessScore || DUMMY_STATS.readinessScore,
-      streak: streak || DUMMY_STATS.streak,
-      platformsSynced: platformsSynced || DUMMY_STATS.platformsSynced,
-      platformsTotal: DUMMY_STATS.platformsTotal,
-      averageMastery: averageMasteryValue || 62,
-      recentSolved: recentSolvedCount || 8
+      problemsSolved: problemsSolved,
+      readinessScore: readinessScore,
+      streak: streak,
+      platformsSynced: platformsSynced,
+      platformsTotal: 8,
+      averageMastery: averageMasteryValue,
+      recentSolved: recentSolvedCount
     };
 
     res.json({
@@ -187,15 +198,8 @@ export const getMasteryHeatmap = async (req, res) => {
       level: Math.round(m.mastery_probability * 100)
     }));
 
-    // Merge logic: Start with real data, fill with dummy data for topics not present in real data
-    const existingTopics = new Set(realData.map(d => d.topic.toLowerCase()));
+    // Real data only
     const data = [...realData];
-    
-    DUMMY_MASTERY.forEach(d => {
-      if (!existingTopics.has(d.topic.toLowerCase())) {
-        data.push(d);
-      }
-    });
 
     res.json({ success: true, data: data.slice(0, 8) });
   } catch (error) {
@@ -221,16 +225,8 @@ export const getWeakTopics = async (req, res) => {
       priority: w.riskScore > 75 ? 'high' : w.riskScore > 40 ? 'medium' : 'low'
     }));
 
-    // Merge logic: Fill up to 3 topics
+    // Real data only
     const data = [...realData];
-    if (data.length < 3) {
-      const existingTopics = new Set(realData.map(d => d.topic.toLowerCase()));
-      DUMMY_WEAKNESSES.forEach(d => {
-        if (data.length < 3 && !existingTopics.has(d.topic.toLowerCase())) {
-          data.push(d);
-        }
-      });
-    }
 
     res.json({ success: true, data });
   } catch (error) {
@@ -253,23 +249,11 @@ export const getTodayTasks = async (req, res) => {
       planDate: { $gte: today }
     }).lean();
 
-    let data = [];
-    if (plan) {
-      data = plan.focusTopics.map(t => ({
-        label: `Practice ${t.topicId.replace(/_/g, ' ')} (${t.suggestedTime} mins)`,
-        done: false
-      }));
-    }
-
-    // Fill up to 4 tasks
-    if (data.length < 4) {
-      const existingLabels = new Set(data.map(d => d.label.toLowerCase()));
-      DUMMY_TASKS.forEach(d => {
-        if (data.length < 4 && !existingLabels.has(d.label.toLowerCase())) {
-          data.push(d);
-        }
-      });
-    }
+    // Real data only
+    const data = plan ? plan.focusTopics.map(t => ({
+      label: `Practice ${t.topicId.replace(/_/g, ' ')} (${t.suggestedTime} mins)`,
+      done: false
+    })) : [];
 
     res.json({ success: true, data });
   } catch (error) {
@@ -294,9 +278,9 @@ export const getPerformanceTrend = async (req, res) => {
       score: Math.round(s.readinessScore)
     }));
 
-    // If trend is empty, show dummy trend
+    // If trend is empty, show empty list
     if (data.length === 0) {
-      data = DUMMY_TREND;
+      data = [];
     }
 
     res.json({ success: true, data });
@@ -319,15 +303,8 @@ export const getReadinessScore = async (req, res) => {
       score: Math.round(s.readinessScore)
     }));
 
-    // Merge logic: show real company readiness if available, fill rest with dummy
+    // Real data only
     const data = [...realData];
-    const existingCompanies = new Set(realData.map(d => d.company.toLowerCase()));
-    
-    DUMMY_READINESS.forEach(d => {
-      if (data.length < 4 && !existingCompanies.has(d.company.toLowerCase())) {
-        data.push(d);
-      }
-    });
 
     res.json({ success: true, data });
   } catch (error) {

@@ -223,7 +223,7 @@ async function bootstrap(userId, platform, username) {
             console.log(`[${platform}] Saving TopicMastery for userId: ${userId} (${typeof userId}) topic: ${topicId}`);
             // Update the ML service's native tracking collection
             await TopicMastery.findOneAndUpdate(
-              { userId, topicId },
+              { userId: userId.toString(), topicId: topicId },
               {
                 $setOnInsert: { improvement_trend: 'improving', last_attempt_timestamp: new Date() },
                 $set: {

@@ -176,13 +176,20 @@ class ReadinessModel:
             Readiness prediction with explainability
         """
         try:
-            # Get mastery profile
-            mastery_profile = await self.db.topic_mastery.find_one(
+            # Get mastery profile - aggregate all topics for this user
+            mastery_docs = await self.db.topic_mastery.find(
                 {"userId": request.user_id}
-            ) if self.db is not None else None
+            ).to_list(None) if self.db is not None else []
             
-            if not mastery_profile:
-                mastery_profile = {"topics": []}
+            mastery_profile = {
+                "topics": [
+                    {
+                        "topic_id": doc.get("topicId"),
+                        "mastery": doc.get("mastery_probability", 0),
+                        "trend": doc.get("improvement_trend", "stable")
+                    } for doc in mastery_docs
+                ]
+            }
             
             # Get retention snapshot
             if self.db is not None and self.db.revision_schedule is not None:
