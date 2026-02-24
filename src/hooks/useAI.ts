@@ -7,7 +7,11 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
+import axios from 'axios';
 import api from '../services/api.ts';
+
+// AI Service URL helper
+const getAIServiceUrl = () => import.meta.env.VITE_AI_SERVICE_URL || 'http://localhost:8001';
 
 // ============================================================
 // ML INTELLIGENCE HOOKS
@@ -89,7 +93,7 @@ export const useWeaknessList = (userId: string) => {
     if (!userId) return;
     setLoading(true);
     try {
-      const response = await api.post(`/ai/ml/weakness/analyze`, {
+      const response = await axios.post(`${getAIServiceUrl()}/ai/ml/weakness/analyze`, {
         userId,
         includeContestData: true,
       });
@@ -122,7 +126,7 @@ export const usePlannerTasks = (userId: string, options = {}) => {
     if (!userId) return;
     setLoading(true);
     try {
-      const response = await api.post(`/ai/ml/planner/generate`, {
+      const response = await axios.post(`${getAIServiceUrl()}/ai/ml/planner/generate`, {
         userId,
         dailyMinutes: (options as any).dailyMinutes || 120,
         targetCompany: (options as any).targetCompany,
@@ -157,7 +161,7 @@ export const useReadinessPrediction = (userId: string, targetCompany?: string) =
     if (!userId) return;
     setLoading(true);
     try {
-      const response = await api.post(`/ai/ml/readiness/predict`, {
+      const response = await axios.post(`${getAIServiceUrl()}/ai/ml/readiness/predict`, {
         userId,
         targetCompany,
       });
@@ -195,7 +199,7 @@ export const useMentorChat = (userId: string, topic: string) => {
     async (userMessage: string, context?: any) => {
       setLoading(true);
       try {
-        const response = await api.post(`/ai/mentor/chat`, {
+        const response = await axios.post(`${getAIServiceUrl()}/ai/mentor/chat`, {
           userId,
           topic,
           userMessage,
@@ -239,7 +243,8 @@ export const usePracticeReview = (userId: string) => {
     async (problemDescription: string, userCode: string, language: string, difficulty: string, topic: string, problemId?: string) => {
       setLoading(true);
       try {
-        const response = await api.post(`/ai/practice/review`, {
+        // Call AI service directly (port 8001), not the backend
+        const response = await axios.post(`${getAIServiceUrl()}/ai/practice/review`, {
           userId,
           problemDescription,
           userCode,
@@ -279,7 +284,7 @@ export const useInterviewChat = (userId: string) => {
     async (problem: any, language: string, difficulty: string, topicTags: string[]) => {
       setLoading(true);
       try {
-        const response = await api.post(`/ai/interview/simulate`, {
+        const response = await axios.post(`${getAIServiceUrl()}/ai/interview/simulate`, {
           userId,
           problemId: problem.id,
           problem: problem.title,
@@ -306,7 +311,7 @@ export const useInterviewChat = (userId: string) => {
     async (response: string) => {
       setLoading(true);
       try {
-        const apiResponse = await api.post(`/ai/interview/respond`, {
+        const apiResponse = await axios.post(`${getAIServiceUrl()}/ai/interview/respond`, {
           userId,
           interviewId: interview?.id,
           response,
@@ -344,7 +349,7 @@ export const useLearningContent = () => {
     async (topic: string, subject: string, difficultyLevel = 'medium', userKnowledgeLevel = 3, contentType = 'comprehensive') => {
       setLoading(true);
       try {
-        const response = await api.post(`/ai/learning/generate`, {
+        const response = await axios.post(`${getAIServiceUrl()}/ai/learning/generate`, {
           topic,
           subject,
           difficultyLevel,

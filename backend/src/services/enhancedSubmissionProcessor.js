@@ -19,6 +19,7 @@ import ExternalPlatformSubmission from '../models/ExternalPlatformSubmission.js'
 import { TopicMastery, RevisionSchedule, WeakTopicSignal, ReadinessScore } from '../models/MLIntelligence.js';
 import User from '../models/User.js';
 import TopicMappingService from './topicMappingService.js';
+import UserTopicProgression from '../models/UserTopicProgression.js';
 import MLFeatureBuilder from './mlFeatureBuilder.js';
 import axios from 'axios';
 import logger from '../utils/logger.js'; // Adjust path as needed
@@ -48,7 +49,7 @@ class EnhancedSubmissionProcessor {
     const attempts = TopicMappingService.buildInitialAttempts({
       ...rawSubmission,
       difficultyLevel: topicEnriched.difficultyLevel,
-      runtime,
+      runtime: rawSubmission.runtime,
     });
 
     // Step 4: Combine into enriched document
@@ -138,6 +139,27 @@ class EnhancedSubmissionProcessor {
           );
           return await axios.post(`${ML_SERVICE_URL}/ai/ml/mastery/update`, payload, {
             timeout: 10000,
+          }).then(async (response) => {
+            if (response.data?.success && response.data?.data) {
+              const data = response.data.data;
+              await UserTopicProgression.findOneAndUpdate(
+                { userId: submission.userId, topicId: submission.primaryTopicId || 'misc' },
+                {
+                  $set: {
+                    masteryScore: data.mastery_probability * 100, // 0-100 scale for UI
+                    currentDifficultyLevel: data.recommended_difficulty 
+                      ? data.recommended_difficulty.charAt(0).toUpperCase() + data.recommended_difficulty.slice(1).toLowerCase() 
+                      : 'Medium',
+                    totalAttempts: data.attempts_count,
+                    lastEvaluatedAt: new Date(),
+                    lastAttemptAt: new Date(),
+                  },
+                  $inc: { successfulAttempts: submission.status === 'Accepted' ? 1 : 0 }
+                },
+                { upsert: true, new: true }
+              );
+            }
+            return response;
           });
 
         case 'retention':

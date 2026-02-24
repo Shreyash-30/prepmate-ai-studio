@@ -243,13 +243,31 @@ Keep it motivational and specific.
    */
   static async getAllTopicRecommendations(userId) {
     try {
+      // 1. Fetch all active topics from the database
+      const allTopics = await Topic.find({ isActive: true }).lean();
+      
+      // 2. Fetch user's existing progressions
       const progressions = await UserTopicProgression.getUserProgressionByTopic(userId);
+      const progressionMap = {};
+      progressions.forEach(p => {
+        progressionMap[p.topicId] = p;
+      });
 
       const recommendations = await Promise.all(
-        progressions.map(async (prog) => {
-          const stats = await PracticeAttemptEvent.getTopicStats(userId, prog.topicId);
-          const masteryData = await this.queryMasteryFromML(userId, prog.topicId);
-          const topicMetadata = await Topic.findOne({ topicId: prog.topicId });
+        allTopics.map(async (topicMetadata) => {
+          const topicId = topicMetadata.topicId;
+          const prog = progressionMap[topicId] || {
+            topicId,
+            progressionReadinessScore: 0,
+            currentDifficultyLevel: 'Easy',
+            recommendedNextDifficulty: 'Easy',
+            isOverdue: false,
+            hasWeaknesses: false,
+            lastAttemptAt: null,
+          };
+
+          const stats = await PracticeAttemptEvent.getTopicStats(userId, topicId);
+          const masteryData = await this.queryMasteryFromML(userId, topicId);
 
           // Use readiness as mastery if ML service unavailable or returns 0
           const masteryScore = (masteryData?.mastery_probability && masteryData.mastery_probability > 0) 
@@ -257,22 +275,22 @@ Keep it motivational and specific.
             : prog.progressionReadinessScore;
 
           return {
-            topicId: prog.topicId,
-            topic: topicMetadata ? {
+            topicId: topicId,
+            topic: {
               name: topicMetadata.name,
               description: topicMetadata.description,
               icon: topicMetadata.icon,
               color: topicMetadata.color,
               questionCount: topicMetadata.questionCount,
               difficulty: topicMetadata.difficulty,
-            } : null,
+            },
             masteryScore: masteryScore,
             progressionReadinessScore: prog.progressionReadinessScore,
             readinessScore: prog.progressionReadinessScore,
             currentDifficultyLevel: prog.currentDifficultyLevel,
             recommendedDifficulty: prog.recommendedNextDifficulty,
-            attemptCount: stats.totalAttempts,
-            successRate: stats.successRate,
+            attemptCount: stats.totalAttempts || prog.totalAttempts || 0,
+            successRate: stats.totalAttempts ? stats.successRate : (prog.averageAccuracy || 0),
             lastAttemptAt: prog.lastAttemptAt,
             isOverdue: prog.isOverdue,
             hasWeaknesses: prog.hasWeaknesses,

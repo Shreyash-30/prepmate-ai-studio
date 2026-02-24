@@ -26,6 +26,17 @@ const generatedQuestionLogSchema = new mongoose.Schema(
       index: true,
     },
 
+    // Problem Identifier (unique slug for this question)
+    problemId: {
+      type: String,
+      required: true,
+      unique: true,
+      index: true,
+      trim: true,
+      lowercase: true,
+      description: 'Unique problem identifier (e.g., "maximum-depth-of-a-binary-tree")',
+    },
+
     // Question Details
     problemTitle: {
       type: String,
@@ -73,6 +84,80 @@ const generatedQuestionLogSchema = new mongoose.Schema(
 
     approachGuide: {
       type: String,
+    },
+
+    // ============================================================
+    // LEETCODE-STYLE FUNCTION METADATA (NEW FIELDS)
+    // ============================================================
+    
+    // Function metadata for structured execution
+    functionMetadata: {
+      type: mongoose.Schema.Types.Mixed,  // ✅ FIXED: Allow flexible object structure
+      default: null,
+      description: '{functionName: string, parameters: [{name: string, type: string}], returnType: string}',
+    },
+
+    // Starter code templates for each language
+    starterCode: {
+      javascript: String,
+      python: String,
+      java: String,
+      cpp: String,
+      csharp: String,
+      go: String,
+      rust: String,
+      typescript: String,
+    },
+
+    // Code wrapper templates for execution
+    wrapperTemplate: {
+      javascript: String,
+      python: String,
+      java: String,
+      cpp: String,
+      csharp: String,
+      go: String,
+      rust: String,
+      typescript: String,
+    },
+
+    // Structured test cases with visibility (CONSISTENT WITH QuestionBank)
+    testCasesStructured: [
+      {
+        input: mongoose.Schema.Types.Mixed,  // JSON object
+        expectedOutput: mongoose.Schema.Types.Mixed,  // JSON value/object
+        visibility: {
+          type: String,
+          enum: ['public', 'hidden'],
+          required: true,
+        },
+        _id: false,
+      },
+    ],
+
+    // Problem constraints
+    constraints: {
+      type: String,
+      description: 'Input/output constraints (e.g., "1 <= n <= 1000")',
+    },
+
+    // Full problem description / Problem Statement
+    description: {
+      type: String,
+      description: 'Complete problem statement',
+    },
+
+    // Schema version (for future upgrades)
+    schemaVersion: {
+      type: Number,
+      default: 2,  // Version 2 = LeetCode-style structured
+      description: 'Schema version for backward compatibility',
+    },
+
+    isLegacy: {
+      type: Boolean,
+      default: false,
+      description: 'Old format without wrapperTemplate; cannot execute',
     },
 
     // Generation Context

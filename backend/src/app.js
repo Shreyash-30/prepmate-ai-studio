@@ -7,6 +7,8 @@ import authRoutes from './routes/authRoutes.js';
 import integrationRoutes from './routes/integrationRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
 import practiceRoutes from './routes/practiceRoutes.js';
+import { validateEnvironment } from './utils/envValidator.js';
+import logger from './utils/logger.js';
 
 dotenv.config();
 
@@ -56,13 +58,21 @@ async function startServer() {
     // Connect to MongoDB
     await connectDB();
 
+    // Validate environment configuration
+    const envValidation = validateEnvironment();
+    if (!envValidation) {
+      logger.error('Environment validation failed. Exiting.');
+      process.exit(1);
+    }
+
     // Start Express server
     app.listen(PORT, () => {
-      console.log(`PrepMate AI Backend running on port ${PORT}`);
-      console.log(`Health check: http://localhost:${PORT}/health`);
+      console.log(`\n✅ PrepMate AI Backend running on port ${PORT}`);
+      console.log(`📊 Health check: http://localhost:${PORT}/health`);
+      console.log(`🚀 API ready for requests\n`);
     });
   } catch (error) {
-    console.error('Failed to start server:', error);
+    logger.error('Failed to start server:', error);
     process.exit(1);
   }
 }

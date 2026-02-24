@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowRight, BookOpen, Brain, Code2, Database, Cpu, Network, ChevronRight, Zap, Target, Loader } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAllRecommendations } from '@/hooks/useTopicRecommendations';
 import { useProgressionStatus, useProgressionReport } from '@/hooks/useProgressionStatus';
 import { useQuestionSelection, useGeneratePersonalizedQuestions } from '@/hooks/useQuestionSelection';
@@ -27,6 +28,7 @@ function getMasteryColor(level: number) {
 }
 
 export default function Practice() {
+  const navigate = useNavigate();
   const [view, setView] = useState<View>('subjects');
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
   const [useLLMQuestions, setUseLLMQuestions] = useState(false);
@@ -314,8 +316,11 @@ export default function Practice() {
                     isDuplicate={question.isDuplicate || false}
                     learnerLevel={question.learnerLevel}
                     onAILabClick={() => {
-                      // Handle AI Lab click - navigate to AI practice for this problem
-                      console.log('Open AI Lab for:', question.problemTitle);
+                      // Navigate to AI Lab code editor with problem
+                      const problemId = question.problemId || question.problemTitle?.toLowerCase().replace(/\s+/g, '-');
+                      navigate(`/ai-lab/${problemId}`, {
+                        state: { problem: question },
+                      });
                     }}
                   />
                 ))}

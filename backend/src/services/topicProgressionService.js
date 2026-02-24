@@ -15,6 +15,8 @@ import logger from '../utils/logger.js';
 import UserTopicProgression from '../models/UserTopicProgression.js';
 import PracticeAttemptEvent from '../models/PracticeAttemptEvent.js';
 import QuestionBank from '../models/QuestionBank.js';
+import Topic from '../models/Topic.js';
+import { TopicMastery } from '../models/MLIntelligence.js';
 
 /**
  * Topic Progression Service
@@ -328,11 +330,29 @@ class TopicProgressionService {
       const progression = await UserTopicProgression.findOrCreateForUser(userId, topicId);
       const stats = await PracticeAttemptEvent.getTopicStats(userId, topicId);
       const attempts = await PracticeAttemptEvent.getRecentPractice(userId, topicId, 10);
+      
+      const topicMetadata = await Topic.findOne({ topicId });
+      const masteryData = await TopicMastery.findOne({ userId, topicId });
+      
+      const masteryScore = (masteryData?.mastery_probability && masteryData.mastery_probability > 0)
+        ? masteryData.mastery_probability
+        : progression.progressionReadinessScore;
 
       return {
         topicId: topicId,
-        currentLevel: progression.currentDifficultyLevel,
+        topic: topicMetadata ? {
+          name: topicMetadata.name,
+          description: topicMetadata.description,
+          icon: topicMetadata.icon,
+          color: topicMetadata.color,
+          questionCount: topicMetadata.questionCount,
+          difficulty: topicMetadata.difficulty,
+        } : null,
+        masteryScore: masteryScore,
+        currentDifficultyLevel: progression.currentDifficultyLevel,
+        progressionReadinessScore: progression.progressionReadinessScore,
         readinessScore: progression.progressionReadinessScore,
+        attemptCount: stats.totalAttempts || progression.totalAttempts || 0,
         isMastered: progression.isMastered,
         stats: stats,
         progression: progression.difficultyProgression,

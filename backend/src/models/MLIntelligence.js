@@ -19,7 +19,7 @@ import mongoose from 'mongoose';
 const TopicMasterySchema = new mongoose.Schema(
   {
     userId: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: String,
       required: true,
       ref: 'User',
       index: true,
@@ -70,7 +70,7 @@ TopicMasterySchema.index({ userId: 1, mastery_probability: -1 });
 const RevisionScheduleSchema = new mongoose.Schema(
   {
     userId: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: String,
       required: true,
       ref: 'User',
       index: true,
@@ -119,7 +119,7 @@ RevisionScheduleSchema.index({ userId: 1, urgency_level: 1 });
 const WeakTopicSignalSchema = new mongoose.Schema(
   {
     userId: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: String,
       required: true,
       ref: 'User',
       index: true,
@@ -166,7 +166,7 @@ WeakTopicSignalSchema.index({ userId: 1, riskScore: -1 });
 const ReadinessScoreSchema = new mongoose.Schema(
   {
     userId: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: String,
       required: true,
       ref: 'User',
       index: true,
@@ -218,7 +218,7 @@ ReadinessScoreSchema.index({ userId: 1, readinessScore: -1 });
 const AdaptiveStudyPlanSchema = new mongoose.Schema(
   {
     userId: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: String,
       required: true,
       ref: 'User',
       index: true,

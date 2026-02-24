@@ -4,7 +4,7 @@ Exposes endpoints for mentor, practice review, interview, and learning services
 """
 import logging
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Body
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from .gemini_client import get_gemini_client
@@ -477,7 +477,7 @@ async def explain_concept(
 
 # Question Generation
 @router.post("/practice/generate-questions")
-async def generate_questions(request: dict):
+async def generate_questions(request: dict = Body(...)):
     """
     Generate personalized coding practice questions using Gemini
     
@@ -528,25 +528,15 @@ async def generate_questions(request: dict):
         
         logger.info(f"Generating questions for topic: {learner_profile.get('topicId', 'Unknown')}")
         
-        # Generate questions using Gemini
+        # Generate questions using Gemini (no fallback - only LLM-generated questions)
         result = await QuestionGenerationService.generate_questions(
             learner_profile=learner_profile,
             limit=limit
         )
         
-        # If Gemini unavailable, provide fallback questions
-        if not result['success'] and result.get('error'):
-            logger.info("Using fallback questions")
-            fallback_questions = QuestionGenerationService.get_fallback_questions(
-                learner_profile=learner_profile,
-                limit=limit
-            )
-            return {
-                "success": True,
-                "questions": fallback_questions,
-                "source": "fallback",
-                "message": "Using fallback questions - Gemini service unavailable"
-            }
+        # Return result directly - error if LLM generation failed
+        if not result['success']:
+            logger.error(f"Question generation failed: {result.get('error')}")
         
         return result
         

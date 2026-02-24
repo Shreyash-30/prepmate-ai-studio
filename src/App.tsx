@@ -7,6 +7,7 @@ import { ProtectedRoute, PublicRoute } from '@/components/ProtectedRoute';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Practice = lazy(() => import('./pages/Practice'));
+const PracticeProblem = lazy(() => import('./pages/PracticeProblem'));
 const Revision = lazy(() => import('./pages/Revision'));
 const MockInterview = lazy(() => import('./pages/MockInterview'));
 const Planner = lazy(() => import('./pages/Planner'));
@@ -41,6 +42,7 @@ const App = () => (
           <Route element={<AppLayout />}>
             <Route path="/dashboard" element={<ProtectedRoute element={<Dashboard />} />} />
             <Route path="/practice" element={<ProtectedRoute element={<Practice />} />} />
+            <Route path="/ai-lab/:problemId" element={<ProtectedRoute element={<PracticeProblem />} />} />
             <Route path="/revision" element={<ProtectedRoute element={<Revision />} />} />
             <Route path="/mock-interview" element={<ProtectedRoute element={<MockInterview />} />} />
             <Route path="/planner" element={<ProtectedRoute element={<Planner />} />} />

@@ -59,6 +59,22 @@ export const practiceService = {
   getTopicIntelligence: (topicId: string) => api.get(`/practice/topics/${topicId}/intelligence`),
   getQuestions: (topicId: string, difficulty?: string) => api.get(`/practice/topics/${topicId}/questions`, { params: { difficulty } }),
   submitSolution: (questionId: string, data: Record<string, unknown>) => api.post(`/practice/questions/${questionId}/submit`, data),
+  
+  // Phase 3 & 5 - Practice Session Management
+  startSession: (topicId: string, problemId: string) => 
+    api.post('/practice/session/start', { topicId, problemId }),
+  getSession: (sessionId: string) => 
+    api.get(`/practice/session/${sessionId}`),
+  submitCode: (data: { sessionId: string; code: string; explanation?: string; voiceTranscript?: string }) => 
+    api.post('/practice/submit', data),
+  getHint: (sessionId: string, level: number) => 
+    api.get(`/practice/hint/${sessionId}?level=${level}`),
+  getCodeReview: (sessionId: string, code: string) => 
+    api.get(`/practice/review/${sessionId}?code=${encodeURIComponent(code)}`),
+  getInlineAssist: (sessionId: string, cursorLine: number) => 
+    api.get(`/practice/inline-assist/${sessionId}?cursorLine=${cursorLine}`),
+  scoreExplanation: (sessionId: string, explanation: string, voiceTranscript?: string) => 
+    api.post(`/practice/score-explanation/${sessionId}`, { explanation, voiceTranscript }),
 };
 
 export const revisionService = {

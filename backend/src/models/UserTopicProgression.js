@@ -33,6 +33,14 @@ const userTopicProgressionSchema = new mongoose.Schema(
     // PROGRESSION METRICS
     // ============================================
 
+    masteryScore: {
+      type: Number,
+      min: 0,
+      max: 100,
+      default: 0,
+      description: 'Calculated mastery score from ML backend (0-100)',
+    },
+
     // Current difficulty user is practicing at
     currentDifficultyLevel: {
       type: String,

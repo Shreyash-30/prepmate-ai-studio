@@ -3,7 +3,11 @@ import ExternalPlatformProfile from '../models/ExternalPlatformProfile.js';
 import ExternalPlatformSubmission from '../models/ExternalPlatformSubmission.js';
 import IntegrationSyncLog from '../models/IntegrationSyncLog.js';
 import User from '../models/User.js';
-import { fetchProfile as lcFetchProfile, fetchSubmissions as lcFetchSubmissions, fetchAcceptanceRate } from './leetcodeIntegrationService.js';
+import EnhancedSubmissionProcessor from './enhancedSubmissionProcessor.js';
+import TopicMappingService from './topicMappingService.js';
+import { TopicMastery } from '../models/MLIntelligence.js';
+import UserTopicProgression from '../models/UserTopicProgression.js';
+import { fetchProfile as lcFetchProfile, fetchSubmissions as lcFetchSubmissions, fetchSkillStats } from './leetcodeIntegrationService.js';
 import { fetchProfile as cfFetchProfile, fetchSubmissions as cfFetchSubmissions } from './codeforcesIntegrationService.js';
 
 /**
@@ -115,8 +119,17 @@ async function bootstrap(userId, platform, username) {
 
     console.log(`[${platform}] Inserting ${submissions.length} submissions into database...`);
     
+    // Fetch user once for ML processing argument
+    const userForML = await User.findById(userId);
+
     for (const submission of submissions) {
       try {
+        const enrichedSubmission = EnhancedSubmissionProcessor.enrichSubmission(
+          submission,
+          userId,
+          platform
+        );
+
         const result = await ExternalPlatformSubmission.updateOne(
           {
             userId,
@@ -124,9 +137,7 @@ async function bootstrap(userId, platform, username) {
             platformSubmissionId: submission.platformSubmissionId,
           },
           {
-            userId,
-            platform,
-            ...submission,
+            $set: enrichedSubmission,
           },
           { upsert: true }
         );
@@ -134,6 +145,13 @@ async function bootstrap(userId, platform, username) {
         // Check if it was inserted (upserted) or already existed
         if (result.upsertedId) {
           recordsInserted++;
+          // Trigger ML Pipeline for new submissions
+          if (userForML) {
+            const savedDoc = await ExternalPlatformSubmission.findById(result.upsertedId);
+            if (savedDoc) {
+              await EnhancedSubmissionProcessor.queueMLUpdates(savedDoc, userForML);
+            }
+          }
         } else if (result.matchedCount > 0) {
           recordsDuplicated++;
         }
@@ -153,6 +171,79 @@ async function bootstrap(userId, platform, username) {
     }
 
     console.log(`[${platform}] Submissions insertion complete: inserted=${recordsInserted}, duplicated=${recordsDuplicated}`);
+
+    // ----- NEW: Inject Topic Progression from historical Skill Stats -----
+    if (platform === 'leetcode' && profile.totalSolved > 0) {
+      console.log(`[${platform}] Fetching deep skill stats for ${username} to bootstrap historical progressions...`);
+      try {
+        const skillStats = await fetchSkillStats(username);
+        const internalTopicCounts = {};
+
+        // Aggregate tags across fundamental, intermediate, advanced into internal topic counts
+        ['fundamental', 'intermediate', 'advanced'].forEach(level => {
+          if (Array.isArray(skillStats[level])) {
+            skillStats[level].forEach(tagData => {
+              const internalTopic = TopicMappingService.mapTag(tagData.tagSlug) || 'misc';
+              internalTopicCounts[internalTopic] = (internalTopicCounts[internalTopic] || 0) + tagData.problemsSolved;
+            });
+          }
+        });
+
+        // Write artificial progression records to DB
+        console.log(`[${platform}] Injecting historical topic progressions for ${Object.keys(internalTopicCounts).length} topics...`);
+        for (const [topicId, solvedCount] of Object.entries(internalTopicCounts)) {
+          if (solvedCount <= 0) continue;
+          
+          let mastery = 0;
+          let level = 'Easy';
+          let rd = 0; // Readiness
+          if (solvedCount >= 30) { mastery = Math.min(100, 70 + solvedCount*0.2); level = 'Hard'; rd = 0.9; }
+          else if (solvedCount >= 10) { mastery = 50 + solvedCount; level = 'Medium'; rd = 0.6; }
+          else { mastery = 20 + solvedCount*2; level = 'Easy'; rd = 0.2; }
+
+          await UserTopicProgression.findOneAndUpdate(
+            { userId, topicId },
+            {
+              $setOnInsert: { firstAttemptAt: new Date() },
+              $set: {
+                totalAttempts: solvedCount * 2,
+                successfulAttempts: solvedCount,
+                masteryScore: mastery,
+                currentDifficultyLevel: level,
+                progressionReadinessScore: rd,
+                lastEvaluatedAt: new Date(),
+                lastAttemptAt: new Date(),
+              }
+            },
+            { upsert: true }
+          );
+
+          try {
+            console.log(`[${platform}] Saving TopicMastery for userId: ${userId} (${typeof userId}) topic: ${topicId}`);
+            // Update the ML service's native tracking collection
+            await TopicMastery.findOneAndUpdate(
+              { userId, topicId },
+              {
+                $setOnInsert: { improvement_trend: 'improving', last_attempt_timestamp: new Date() },
+                $set: {
+                  mastery_probability: mastery / 100, // 0-1 scale internal
+                  attempts_count: solvedCount,
+                  recommended_difficulty: level.toLowerCase(),
+                  confidence_score: rd
+                }
+              },
+              { upsert: true }
+            );
+          } catch (e) {
+            console.error(`[${platform}] Error syncing TopicMastery for ${topicId}:`, e.message);
+          }
+        }
+        console.log(`[${platform}] Historical topic progressions injected successfully.`);
+      } catch (err) {
+        console.error(`[${platform}] Failed to bootstrap historical progressions:`, err.message);
+      }
+    }
+    // ----------------------------------------------------------------------
 
     // NOTE: For LeetCode, individual submissions are not available via public API.
     // We use profile.totalSolved (from aggregate stats) as the source of truth.
@@ -237,6 +328,14 @@ async function bootstrap(userId, platform, username) {
     console.log(`  - Records fetched: ${submissions.length}`);
     console.log(`  - Records inserted: ${recordsInserted}`);
     console.log(`  - Records duplicated: ${recordsDuplicated}`);
+
+    // Trigger full weakness analysis after successful bootstrap
+    if (userForML && recordsInserted > 0) {
+      console.log(`[${platform}] Triggering full Weakness Analysis post-bootstrap...`);
+      EnhancedSubmissionProcessor.callMLService('weakness', { userId }, userForML).catch(err => {
+        console.error(`[${platform}] Initial weakness analysis failed:`, err.message);
+      });
+    }
 
     return {
       success: true,

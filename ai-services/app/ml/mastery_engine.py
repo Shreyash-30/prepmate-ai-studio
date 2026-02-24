@@ -331,3 +331,100 @@ class MasteryEngine:
         except Exception as e:
             logger.error(f"Error retrieving user profile: {str(e)}")
             return {"topics": []}
+    
+    async def update_mastery_with_independence(
+        self,
+        user_id: str,
+        topic_id: str,
+        base_mastery: float,
+        independence_score: float,
+        hint_dependency: float = 0.0,
+        voice_dependency: float = 0.0,
+        retry_dependency: float = 0.0,
+    ) -> float:
+        """
+        Phase 4 Enhancement: Update mastery using independence score
+        
+        Formula:
+        effective_mastery = base_mastery * independence_score
+        
+        Where:
+        independence_score = 1 - (hint_dependency + voice_dependency + retry_dependency)
+        
+        This ensures learners who require many hints/voice/retries
+        have proportionally reduced mastery scores, reflecting
+        lower independence in problem-solving.
+        """
+        try:
+            logger.info(f"🔄 Phase 4 Mastery Update with Independence for {topic_id}")
+            
+            # Apply independence penalty
+            effective_mastery = base_mastery * independence_score
+            effective_mastery = np.clip(effective_mastery, 0.0, 1.0)
+            
+            # Calculate trend if we have history
+            current_doc = None
+            if self.collection:
+                current_doc = await self.collection.find_one({
+                    "userId": user_id,
+                    "topicId": topic_id,
+                })
+            
+            if current_doc:
+                previous_mastery = current_doc.get("mastery_probability", base_mastery)
+                if effective_mastery > previous_mastery + 0.05:
+                    trend = "improving"
+                elif effective_mastery < previous_mastery - 0.05:
+                    trend = "declining"
+                else:
+                    trend = "stable"
+            else:
+                trend = "improving" if effective_mastery > base_mastery else "stable"
+            
+            # Build explanation with independence details
+            explainability = {
+                "reason": f"Effective mastery: {effective_mastery:.1%} (base {base_mastery:.1%} × independence {independence_score:.1%})",
+                "independence_components": {
+                    "hint_dependency": float(hint_dependency),
+                    "voice_dependency": float(voice_dependency),
+                    "retry_dependency": float(retry_dependency),
+                    "total_dependency": float(hint_dependency + voice_dependency + retry_dependency),
+                    "independence_score": float(independence_score),
+                },
+                "model": "Bayesian Knowledge Tracing + Independence Scoring (Phase 4)",
+                "factors": [
+                    f"Base mastery from BKT: {base_mastery:.1%}",
+                    f"Independence score: {independence_score:.1%}",
+                    f"Effective mastery: {effective_mastery:.1%}",
+                    f"Trend: {trend}",
+                ],
+            }
+            
+            # Update database
+            if self.collection:
+                update_data = {
+                    "userId": user_id,
+                    "topicId": topic_id,
+                    "mastery_probability": effective_mastery,
+                    "base_mastery": base_mastery,
+                    "independence_score": independence_score,
+                    "hint_dependency": hint_dependency,
+                    "voice_dependency": voice_dependency,
+                    "retry_dependency": retry_dependency,
+                    "improvement_trend": trend,
+                    "lastUpdated": datetime.utcnow(),
+                }
+                
+                result = await self.collection.update_one(
+                    {"userId": user_id, "topicId": topic_id},
+                    {"$set": update_data},
+                    upsert=True,
+                )
+                
+                logger.info(f"✅ Phase 4 Mastery Updated: {effective_mastery:.3f} (base: {base_mastery:.3f}, independence: {independence_score:.2f})")
+            
+            return effective_mastery
+        
+        except Exception as e:
+            logger.error(f"❌ Error in Phase 4 mastery update: {str(e)}")
+            raise

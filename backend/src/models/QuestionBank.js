@@ -86,6 +86,70 @@ const questionBankSchema = new mongoose.Schema(
       },
     ],
 
+    // ============================================================
+    // LEETCODE-STYLE FUNCTION METADATA (NEW FIELDS)
+    // ============================================================
+
+    // Function metadata for structured execution
+    functionMetadata: {
+      type: mongoose.Schema.Types.Mixed,  // ✅ FIXED: Allow flexible object structure
+      default: null,
+      description: '{functionName: string, parameters: [{name: string, type: string}], returnType: string}',
+    },
+
+    // Starter code templates for each language
+    starterCode: {
+      javascript: String,
+      python: String,
+      java: String,
+      cpp: String,
+      csharp: String,
+      go: String,
+      rust: String,
+      typescript: String,
+    },
+
+    // Code wrapper templates for execution (CRITICAL)
+    wrapperTemplate: {
+      javascript: String,
+      python: String,
+      java: String,
+      cpp: String,
+      csharp: String,
+      go: String,
+      rust: String,
+      typescript: String,
+    },
+
+    // Structured test cases with visibility
+    testCasesStructured: [
+      {
+        input: mongoose.Schema.Types.Mixed,  // JSON object
+        expectedOutput: mongoose.Schema.Types.Mixed,  // JSON value/object
+        visibility: {
+          type: String,
+          enum: ['public', 'hidden'],
+          required: true,
+        },
+        _id: false,
+      },
+    ],
+
+    // Problem constraints
+    constraints: {
+      type: String,
+      description: 'Input/output constraints (e.g., "1 <= n <= 1000")',
+    },
+
+    // Schema version (REQUIRED: v2 only, wrapped execution)
+    schemaVersion: {
+      type: Number,
+      required: true,
+      enum: [2],  // ENFORCE: Only v2 (LeetCode-style structured execution)
+      default: 2,
+      description: 'Schema version - ONLY 2 (wrapped execution) supported',
+    },
+
     // Source Information
     source: {
       type: String,
@@ -220,5 +284,68 @@ questionBankSchema.methods.ensureContentLoaded = function () {
   }
   return true;
 };
+
+// ============================================
+// VALIDATION HOOKS - ENFORCE WRAPPED EXECUTION
+// ============================================
+
+// Pre-save validation: Ensure all required wrapped execution fields exist
+questionBankSchema.pre('save', function (next) {
+  // ENFORCE: schemaVersion must be 2
+  if (this.schemaVersion !== 2) {
+    return next(new Error(
+      `❌ HARD FAIL: Only schemaVersion 2 (wrapped execution) supported. Got: ${this.schemaVersion}`
+    ));
+  }
+
+  // ENFORCE: wrapperTemplate must exist and have at least python
+  if (!this.wrapperTemplate) {
+    return next(new Error('❌ HARD FAIL: wrapperTemplate is required for wrapped execution'));
+  }
+
+  if (!this.wrapperTemplate.python) {
+    return next(new Error('❌ HARD FAIL: wrapperTemplate.python is required'));
+  }
+
+  // ENFORCE: wrapper must contain __USER_CODE__ placeholder
+  const pythonWrapper = this.wrapperTemplate.python;
+  if (!pythonWrapper.includes('__USER_CODE__')) {
+    return next(new Error('❌ HARD FAIL: wrapperTemplate must contain __USER_CODE__ placeholder'));
+  }
+
+  // ENFORCE: starterCode must exist and have at least python
+  if (!this.starterCode) {
+    return next(new Error('❌ HARD FAIL: starterCode is required for wrapped execution'));
+  }
+
+  if (!this.starterCode.python) {
+    return next(new Error('❌ HARD FAIL: starterCode.python is required'));
+  }
+
+  // ENFORCE: testCasesStructured must exist and not be empty
+  if (!Array.isArray(this.testCasesStructured) || this.testCasesStructured.length === 0) {
+    return next(new Error('❌ HARD FAIL: testCasesStructured must exist and have at least 1 test case'));
+  }
+
+  // ENFORCE: Each test case must have input, expectedOutput, and visibility
+  for (const tc of this.testCasesStructured) {
+    if (tc.input === undefined || tc.input === null) {
+      return next(new Error('❌ HARD FAIL: Each testCase.input is required'));
+    }
+    if (tc.expectedOutput === undefined || tc.expectedOutput === null) {
+      return next(new Error('❌ HARD FAIL: Each testCase.expectedOutput is required'));
+    }
+    if (!['public', 'hidden'].includes(tc.visibility)) {
+      return next(new Error(`❌ HARD FAIL: testCase.visibility must be 'public' or 'hidden', got: ${tc.visibility}`));
+    }
+  }
+
+  // ENFORCE: functionMetadata must exist
+  if (!this.functionMetadata) {
+    return next(new Error('❌ HARD FAIL: functionMetadata is required for wrapped execution'));
+  }
+
+  next();
+});
 
 export default mongoose.model('QuestionBank', questionBankSchema);

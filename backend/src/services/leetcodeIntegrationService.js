@@ -278,6 +278,52 @@ async function fetchProfile(username) {
 }
 
 /**
+ * Fetch LeetCode user skill stats (tag problem counts)
+ * @param {string} username - LeetCode username
+ * @returns {Promise<Object>} Object containing advanced, intermediate, and fundamental tag counts
+ */
+async function fetchSkillStats(username) {
+  const query = `
+    query skillStats($username: String!) {
+      matchedUser(username: $username) {
+        tagProblemCounts {
+          advanced { tagName tagSlug problemsSolved }
+          intermediate { tagName tagSlug problemsSolved }
+          fundamental { tagName tagSlug problemsSolved }
+        }
+      }
+    }
+  `;
+
+  try {
+    console.log(`[LeetCode] Fetching skill stats for user: ${username}`);
+    const response = await axios.post(
+      LEETCODE_GRAPHQL_URL,
+      { query, variables: { username } },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (PrepMate-AI-Studio)',
+          'Referer': 'https://leetcode.com/',
+        },
+        timeout: 10000,
+      }
+    );
+
+    if (response.data?.errors) {
+      console.warn(`[LeetCode] GraphQL Warning fetching skill stats:`, response.data.errors[0].message);
+      return { advanced: [], intermediate: [], fundamental: [] };
+    }
+
+    const tagCounts = response.data?.data?.matchedUser?.tagProblemCounts;
+    return tagCounts || { advanced: [], intermediate: [], fundamental: [] };
+  } catch (error) {
+    console.error(`[LeetCode] Error fetching skill stats for ${username}:`, error.message);
+    return { advanced: [], intermediate: [], fundamental: [] };
+  }
+}
+
+/**
  * Fetch LeetCode user submissions with enriched metadata
  * Uses new individual problem detail queries with caching
  * @param {string} username - LeetCode username
@@ -407,5 +453,6 @@ export {
   fetchQuestionMetadata,
   getOrFetchMetadata,
   fetchMetadataBatch,
+  fetchSkillStats,
   ProblemMetadataCache,
 };

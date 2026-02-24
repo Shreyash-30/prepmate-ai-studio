@@ -27,16 +27,16 @@ const TAG_MAPPING = {
   'randomized': 'arrays',
 
   // LINKED LISTS
-  'linked-list': 'linked_lists',
-  'linked list': 'linked_lists',
-  'list': 'linked_lists',
-  'recursion': 'linked_lists',
+  'linked-list': 'linked-lists',
+  'linked list': 'linked-lists',
+  'list': 'linked-lists',
+  'recursion': 'linked-lists',
 
   // TREES
   'tree': 'trees',
   'binary-tree': 'trees',
-  'binary-search-tree': 'binary_search_trees',
-  'bst': 'binary_search_trees',
+  'binary-search-tree': 'binary-search-trees',
+  'bst': 'binary-search-trees',
   'trie': 'trie',
 
   // GRAPHS
@@ -50,17 +50,17 @@ const TAG_MAPPING = {
   'union-find': 'graphs',
 
   // DYNAMIC PROGRAMMING
-  'dynamic-programming': 'dynamic_programming',
-  'dp': 'dynamic_programming',
-  'memoization': 'dynamic_programming',
-  'tabulation': 'dynamic_programming',
+  'dynamic-programming': 'dynamic-programming',
+  'dp': 'dynamic-programming',
+  'memoization': 'dynamic-programming',
+  'tabulation': 'dynamic-programming',
 
   // HASH TABLE
-  'hash-table': 'hash_tables',
-  'hash-map': 'hash_tables',
-  'hash': 'hash_tables',
-  'map': 'hash_tables',
-  'set': 'hash_tables',
+  'hash-table': 'hash-tables',
+  'hash-map': 'hash-tables',
+  'hash': 'hash-tables',
+  'map': 'hash-tables',
+  'set': 'hash-tables',
 
   // STRINGS
   'string': 'strings',
@@ -71,14 +71,14 @@ const TAG_MAPPING = {
   // MATH & NUMBERS
   'math': 'math',
   'number-theory': 'math',
-  'bit-manipulation': 'bit_manipulation',
-  'bitwise': 'bit_manipulation',
+  'bit-manipulation': 'bit-manipulation',
+  'bitwise': 'bit-manipulation',
 
   // QUEUES & STACKS
-  'queue': 'queues_stacks',
-  'stack': 'queues_stacks',
-  'priority-queue': 'queues_stacks',
-  'heap': 'queues_stacks',
+  'queue': 'queues-stacks',
+  'stack': 'queues-stacks',
+  'priority-queue': 'queues-stacks',
+  'heap': 'queues-stacks',
 
   // GREEDY
   'greedy': 'greedy',
@@ -87,9 +87,9 @@ const TAG_MAPPING = {
   'backtracking': 'backtracking',
 
   // DESIGN
-  'design': 'system_design',
-  'oop': 'system_design',
-  'object-oriented': 'system_design',
+  'design': 'system-design',
+  'oop': 'system-design',
+  'object-oriented': 'system-design',
 };
 
 // ============================================

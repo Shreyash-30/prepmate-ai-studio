@@ -45,13 +45,16 @@ try:
         InterviewService,
         LearningService,
     )
+    from app.llm.advanced_routers import router as advanced_router
     try:
         from app.ml import initialize_ml_services
         from app.ml.routers import router as ml_router
         ml_available = True
     except ImportError as e:
         print(f"⚠️  WARNING: ML services not available: {e}")
-        initialize_ml_services = lambda: None
+        async def initialize_ml_services(db):
+            """Fallback stub for ML services"""
+            print("  ML services disabled - running with LLM-only mode")
         ml_router = None
         ml_available = False
 except ImportError as e:
@@ -165,6 +168,7 @@ def create_app() -> FastAPI:
 
     # Include routers
     app.include_router(router)
+    app.include_router(advanced_router)
     if ml_available and ml_router:
         app.include_router(ml_router)
 
