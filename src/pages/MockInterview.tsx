@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, Clock, Lock, Play, BarChart3, Brain, MessageSquare, Shield, ChevronRight, Zap, Target, Award, AlertCircle, Terminal } from 'lucide-react';
 import { PageTitle, SectionTitle, CardTitle, BodyText, MutedText, CodeText } from '@/components/ui/Typography';
@@ -13,7 +13,13 @@ const pastInterviews = [
 ];
 
 export default function MockInterview() {
-  const [started, setStarted] = useState(false);
+  const navigate = useNavigate();
+
+  const handleStart = () => {
+    // Generate a temporary session ID and navigate to the session page
+    const sessionId = `int_${Date.now()}`;
+    navigate(`/interview/session/${sessionId}`);
+  };
 
   const container: any = {
     hidden: { opacity: 0 },
@@ -24,124 +30,6 @@ export default function MockInterview() {
     hidden: { opacity: 0, y: 20 },
     show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
   };
-
-  if (started) {
-    return (
-      <motion.div variants={container} initial="hidden" animate="show" className="space-y-6 pb-20">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-lg bg-rose-500/10 flex items-center justify-center text-rose-500 border border-rose-500/20">
-              <Shield className="h-4 w-4" />
-            </div>
-            <PageTitle>Live Assessment</PageTitle>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 rounded-xl bg-rose-500/10 border border-rose-500/20 px-4 py-2 text-rose-500 shadow-soft animate-pulse">
-              <Clock className="h-4 w-4" />
-              <span className="text-sm font-mono font-bold tracking-widest">19:42</span>
-            </div>
-            <div className="flex items-center gap-2 rounded-xl bg-card border border-border px-4 py-2 text-muted-foreground shadow-soft">
-              <Lock className="h-3.5 w-3.5" />
-              <span className="text-[10px] uppercase font-bold tracking-widest">Integrity Mode</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-          {/* Problem Brief */}
-          <motion.div variants={item} className="lg:col-span-5 space-y-4">
-            <div className="glass-card p-6 bg-card border-border/60 shadow-premium relative overflow-hidden group">
-               <div className="absolute top-0 right-0 p-6 opacity-[0.03] group-hover:rotate-12 transition-transform">
-                  <Target className="h-32 w-32" />
-               </div>
-               <div className="relative z-10 space-y-4">
-                <div className="flex items-center justify-between">
-                  <MutedText className="text-[10px] uppercase tracking-widest font-bold opacity-60">Sequence 1 of 2</MutedText>
-                  <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/20 font-bold text-[10px] uppercase">Medium Intensity</Badge>
-                </div>
-                <h2 className="text-2xl font-bold text-foreground tracking-tight">Two Sum</h2>
-                <BodyText className="text-sm leading-relaxed text-foreground/80 font-medium">
-                  Given an array of integers <CodeText className="bg-muted px-1">nums</CodeText> and an integer <CodeText className="bg-muted px-1">target</CodeText>, return indices of the two numbers such that they add up to target.
-                  You may assume that each input would have exactly one solution, and you may not use the same element twice.
-                </BodyText>
-                
-                <div className="space-y-3 pt-2">
-                   <div className="p-3 rounded-xl bg-muted/30 border border-border/50">
-                      <p className="text-[9px] font-bold text-muted-foreground uppercase mb-1">Standard Input</p>
-                      <CodeText className="text-[11px] block">nums = [2,7,11,15], target = 9</CodeText>
-                   </div>
-                   <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/10">
-                      <p className="text-[9px] font-bold text-emerald-500/70 uppercase mb-1">Target Output</p>
-                      <CodeText className="text-[11px] block text-emerald-500/80">[0,1]</CodeText>
-                   </div>
-                </div>
-
-                <div className="pt-4 border-t border-border/40">
-                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Memory Constraints</p>
-                   <ul className="space-y-1">
-                      <li className="text-[10px] font-medium text-foreground/60 flex items-center gap-2">
-                        <div className="h-1 w-1 rounded-full bg-primary" />
-                        Time Complexity: O(n) preferred
-                      </li>
-                      <li className="text-[10px] font-medium text-foreground/60 flex items-center gap-2">
-                        <div className="h-1 w-1 rounded-full bg-primary" />
-                        Auxiliary Space: O(n) max
-                      </li>
-                   </ul>
-                </div>
-               </div>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/20 flex items-start gap-3">
-               <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-               <p className="text-[10px] font-bold text-amber-600/80 leading-relaxed uppercase tracking-tight">Warning: Switching windows or opening browser dev tools will result in an immediate session termination and penalty.</p>
-            </div>
-          </motion.div>
-
-          {/* Neural Code Canvas */}
-          <motion.div variants={item} className="lg:col-span-7 space-y-4">
-            <div className="glass-card flex flex-col bg-card border-border/60 shadow-premium overflow-hidden h-[600px] rounded-3xl">
-              <div className="flex items-center justify-between p-4 border-b border-border bg-muted/20">
-                <div className="flex items-center gap-2">
-                  <div className="h-6 w-px bg-primary/40 mr-1" />
-                  <span className="text-xs font-bold text-foreground uppercase tracking-widest opacity-70">Neural Workspace</span>
-                </div>
-                <select className="rounded-xl bg-background px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider text-foreground border border-border shadow-soft outline-none hover:border-primary/40 transition-all">
-                  <option>Python 3.10</option>
-                  <option>JavaScript (Node v18)</option>
-                  <option>C++ (G++ 11)</option>
-                </select>
-              </div>
-              <div className="flex-1 bg-background p-6 font-mono text-xs text-foreground/70 leading-relaxed relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-8 opacity-[0.02] pointer-events-none">
-                   <Terminal className="h-64 w-64" />
-                </div>
-                <div className="relative z-10">
-                  <span className="text-primary font-bold">def</span> twoSum(self, nums, target):<br />
-                  &nbsp;&nbsp;&nbsp;&nbsp;<span className="text-muted-foreground/30 italic"># Initialize candidate validation matrix</span><br />
-                  &nbsp;&nbsp;&nbsp;&nbsp;<span className="text-primary/60">pass</span>
-                </div>
-              </div>
-              <div className="p-4 bg-muted/10 flex items-center gap-3">
-                <Button className="rounded-2xl bg-primary h-12 px-8 font-bold text-xs tracking-widest shadow-glow hover:shadow-primary/40 active:scale-95 transition-all flex-1">
-                  COMMIT SOLUTION
-                </Button>
-                <Button variant="outline" className="rounded-2xl h-12 px-8 border-border bg-background font-bold text-xs tracking-widest hover:border-primary/40 transition-all shadow-soft active:scale-95">
-                  DRY RUN
-                </Button>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-
-        <div className="flex justify-center pt-4">
-           <button onClick={() => setStarted(false)} className="px-6 py-2 rounded-xl text-[10px] font-bold text-muted-foreground hover:text-rose-500 uppercase tracking-widest transition-all border border-transparent hover:border-rose-500/20 hover:bg-rose-500/5">
-            Abort Assessment
-          </button>
-        </div>
-      </motion.div>
-    );
-  }
 
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-10 pb-20">
@@ -188,7 +76,7 @@ export default function MockInterview() {
           </div>
 
           <Button
-            onClick={() => setStarted(true)}
+            onClick={handleStart}
             size="lg"
             className="mt-10 rounded-2xl bg-primary px-10 h-14 font-extrabold text-sm tracking-widest shadow-glow hover:shadow-primary/40 active:scale-95 transition-all group scale-105"
           >

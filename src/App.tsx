@@ -11,6 +11,7 @@ const PracticeProblem = lazy(() => import('./pages/PracticeProblem'));
 const Revision = lazy(() => import('./pages/Revision'));
 const RevisionWorkspace = lazy(() => import('./pages/RevisionWorkspace'));
 const MockInterview = lazy(() => import('./pages/MockInterview'));
+const MockInterviewSession = lazy(() => import('./pages/MockInterviewSession'));
 const Planner = lazy(() => import('./pages/Planner'));
 const Integrations = lazy(() => import('./pages/Integrations'));
 const Profile = lazy(() => import('./pages/Profile'));
@@ -47,6 +48,7 @@ const App = () => (
             <Route path="/revision" element={<ProtectedRoute element={<Revision />} />} />
             <Route path="/revision/:topicId/session/:sessionId" element={<ProtectedRoute element={<RevisionWorkspace />} />} />
             <Route path="/mock-interview" element={<ProtectedRoute element={<MockInterview />} />} />
+            <Route path="/interview/session/:sessionId" element={<ProtectedRoute element={<MockInterviewSession />} />} />
             <Route path="/planner" element={<ProtectedRoute element={<Planner />} />} />
             <Route path="/integrations" element={<ProtectedRoute element={<Integrations />} />} />
             <Route path="/profile" element={<ProtectedRoute element={<Profile />} />} />

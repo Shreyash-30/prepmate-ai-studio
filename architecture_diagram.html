@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PrepMate AI Studio - System Architecture</title>
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ 
+            startOnLoad: true, 
+            theme: 'dark',
+            securityLevel: 'loose',
+            flowchart: {
+                useMaxWidth: false,
+                htmlLabels: true,
+                curve: 'basis'
+            }
+        });
+    </script>
+    <style>
+        body {
+            background-color: #0d1117;
+            color: #c9d1d9;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px;
+            margin: 0;
+        }
+        .container {
+            background: #161b22;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #30363d;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            max-width: 1200px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            color: #58a6ff;
+            margin-bottom: 30px;
+        }
+        .mermaid {
+            background: #0d1117;
+            padding: 20px;
+            border-radius: 8px;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            overflow-x: auto;
+        }
+        button {
+            margin-top: 30px;
+            background-color: #238636;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #2ea043;
+        }
+        p.info {
+            margin-top: 15px;
+            color: #8b949e;
+            font-size: 14px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>PrepMate AI Studio - System Architecture</h1>
+        <div class="mermaid" id="diagram">
+            graph TD
+                %% Styles
+                classDef frontend fill:#1f2937,stroke:#3b82f6,stroke-width:2px,color:#fff
+                classDef backend fill:#1f2937,stroke:#10b981,stroke-width:2px,color:#fff
+                classDef ai fill:#1f2937,stroke:#8b5cf6,stroke-width:2px,color:#fff
+                classDef external fill:#1f2937,stroke:#f59e0b,stroke-width:2px,color:#fff
+                classDef database fill:#1f2937,stroke:#ef4444,stroke-width:2px,color:#fff
+
+                %% Nodes
+                subgraph Client_Tier [Client Tier]
+                    A[React / Vite Frontend<br>Monaco Editor & UI]:::frontend
+                end
+
+                subgraph API_Tier [API Gateway & Core Logic Tier]
+                    B[Node.js / Express API<br>Auth, Routing, Rate Limiting]:::backend
+                end
+
+                subgraph Data_Tier [Data Storage Tier]
+                    C[(MongoDB<br>User Data, Problems, Attempts)]:::database
+                end
+
+                subgraph Execution_Tier [Code Execution Tier]
+                    D[Judge0 Infrastructure<br>Sandboxed Code Evaluation]:::external
+                end
+
+                subgraph AI_Intelligence_Tier [AI & Machine Learning Tier]
+                    E[Python AI Microservice<br>FastAPI / Flask]:::ai
+                    F[Gemini LLM<br>Question Gen, Reviews, Hints]:::external
+                    G[STT / Voice Processing<br>Whisper / NLP]:::external
+                end
+
+                %% Connections - Data Flow
+                A <-->|REST / SSE (Streaming)| B
+                A <-->|Audio Blobs / STT| B
+                
+                B <-->|CRUD Operations| C
+                B <-->|Payload: Code & Test Cases<br>Returns: Output & Verdicts| D
+                
+                B <-->|Proxy Requests| E
+                E <-->|Prompts & Context| F
+                E <-->|Audio Transcription| G
+        </div>
+        
+        <button onclick="downloadSVG()">Download Diagram as SVG for PowerPoint</button>
+        <p class="info">You can easily insert this SVG vector graphic directly into your PowerPoint slides and scale it without losing quality.</p>
+    </div>
+
+    <script>
+        function downloadSVG() {
+            const svgElement = document.querySelector('.mermaid svg');
+            if (!svgElement) {
+                alert('SVG not fully loaded yet. Please wait a moment.');
+                return;
+            }
+            
+            // Ensure proper default namespace is present
+            if (!svgElement.getAttribute('xmlns')) {
+                svgElement.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+            }
+            
+            const serializer = new XMLSerializer();
+            let source = serializer.serializeToString(svgElement);
+            
+            // Add xml declaration
+            source = '<?xml version="1.0" standalone="no"?>\r\n' + source;
+            
+            const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(source);
+            
+            const a = document.createElement('a');
+            a.download = 'PrepMate_System_Architecture.svg';
+            a.href = url;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+    </script>
+</body>
+</html>
