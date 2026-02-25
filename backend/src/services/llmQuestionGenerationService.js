@@ -237,8 +237,10 @@ class LLMQuestionGenerationService {
             functionName: plainQ.functionMetadata?.functionName || 'solution',
             testCases: Array.isArray(plainQ.testCasesStructured) ? plainQ.testCasesStructured : [],
             schemaVersion: 2,
-            source: 'other',
-            topicId: topicId, // Return topicId for frontend session creation
+            source: plainQ.isPaired ? (plainQ.sourceUrl?.includes('leetcode') ? 'leetcode' : 'platform') : 'leetcode',
+            sourceUrl: plainQ.sourceUrl,
+            platform: plainQ.isPaired ? (plainQ.sourceUrl?.includes('leetcode') ? 'LeetCode' : 'Library') : 'LeetCode',
+            topicId: topicId,
           };
         });
         logger.info(`✅ MAPPED TO FRONTEND FORMAT: ${questionsToReturn.length} questions`);
@@ -255,8 +257,10 @@ class LLMQuestionGenerationService {
           hints: Array.isArray(q.hints) ? q.hints : [],
           functionName: q.functionName || 'solve',
           testCases: q.testCases || [],
-          schemaVersion: 2,  // ENFORCE v2 even in fallback
-          source: 'other',
+          schemaVersion: 2,
+          source: 'leetcode',
+          sourceUrl: q.sourceUrl || `https://leetcode.com/problems/${(q.problemTitle || '').toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-')}/`,
+          platform: 'LeetCode',
           topicId: topicId,
         }));
         logger.warn(`   Using fallback: ${questionsToReturn.length} questions in v2 format`);
@@ -766,7 +770,7 @@ Generate ${learnerProfile.desiredQuestionCount} questions now.`;
           generationSessionId: q.generationSessionId || `session_${Date.now()}`,
           geminiModelVersion: 'gemini-2.5-flash',
           sourceQuestionBankId: qbQuestion?._id || null,
-          sourceUrl: qbQuestion?.sourceUrl || null,
+          sourceUrl: qbQuestion?.sourceUrl || `https://leetcode.com/problems/${q.problemTitle.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-')}/`,
           isPaired: !!qbQuestion,
           // ✅ WRAPPED EXECUTION FIELDS (CONSISTENT WITH QuestionBank)
           functionMetadata: functionMetadata,
@@ -1071,9 +1075,9 @@ Generate ${learnerProfile.desiredQuestionCount} questions now.`;
           starterCode: starterCode,
           functionMetadata: functionMetadata,
           testCasesStructured: testCasesStructured,
-          source: 'other',
-          sourceUrl: null,
-          sourceId: `generated-${Date.now()}-${q.problemId || this.generateProblemId(q.problemTitle)}`,  // ✅ CRITICAL: Unique per question
+          source: q.platform === 'Library' ? 'platform' : 'leetcode',
+          sourceUrl: q.sourceUrl || `https://leetcode.com/problems/${q.problemTitle.toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-')}/`,
+          sourceId: `generated-${Date.now()}-${q.problemId || this.generateProblemId(q.problemTitle)}`,
           acceptanceRate: 50,
           submissionCount: 0,
           isPremium: false,

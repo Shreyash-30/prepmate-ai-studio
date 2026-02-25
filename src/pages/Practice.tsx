@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, BookOpen, Brain, Code2, Database, Cpu, Network, ChevronRight, Zap, Target, Loader, Sparkles, Layout, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import api, { authService } from '@/services/api';
 import { useAllRecommendations } from '@/hooks/useTopicRecommendations';
 import { useProgressionStatus } from '@/hooks/useProgressionStatus';
 import { useQuestionSelection, useGeneratePersonalizedQuestions } from '@/hooks/useQuestionSelection';
@@ -40,19 +41,58 @@ export default function Practice() {
   const { progression: selectedProgression, recommendation: nextAction } = useProgressionStatus(selectedTopicId);
   const { questions: nextProblems, loading: questionsLoading } = useQuestionSelection(selectedTopicId, { limit: 15 });
   const { generateQuestions, questions: llmQuestions, loading: llmLoading, error: llmError } = useGeneratePersonalizedQuestions();
+  const [userProfile, setUserProfile] = useState<any>(null);
 
   useQuestionGenerationFlow(selectedTopicId, useLLMQuestions, llmQuestions || [], llmLoading, llmError);
 
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const response = await authService.getProfile();
+        setUserProfile(response.data.user);
+      } catch (err) {
+        console.error('Failed to fetch user profile:', err);
+      }
+    };
+    fetchUser();
+  }, []);
+
   const getSubjectStats = (subjectId: string) => {
+    const isLCConnected = userProfile?.platformProfiles?.leetcode?.connected;
+    const lcSolved = userProfile?.platformProfiles?.leetcode?.totalSolved || 0;
+
     if (!recommendations || recommendations.length === 0) {
-      return { modules: 0, completion: 0 };
+      if (subjectId === 'dsa' && isLCConnected) {
+        const estimatedProficiency = Math.min(95, Math.max(5, Math.round((lcSolved / 500) * 100)));
+        return { modules: 0, completion: estimatedProficiency, totalSolved: lcSolved, totalQuestions: 0 };
+      }
+      return { modules: 0, completion: 0, totalSolved: 0, totalQuestions: 0 };
     }
+    
     const relevantRecs = recommendations.filter(r => (r.topic?.category || 'dsa') === subjectId);
     const modules = relevantRecs.length;
-    const avgMastery = modules > 0 
+    
+    // Calculate total solved from topics
+    let totalSolved = relevantRecs.reduce((sum, r) => sum + (r.successfulAttempts || 0), 0);
+    
+    // Prioritize LeetCode profile count for DSA
+    if (subjectId === 'dsa' && isLCConnected) {
+      totalSolved = Math.max(totalSolved, lcSolved);
+    }
+    
+    // Calculate Proficiency
+    let avgMastery = modules > 0 
       ? Math.round(relevantRecs.reduce((sum, r) => sum + (r.masteryScore || 0), 0) / modules * 100) 
       : 0;
-    return { modules, completion: avgMastery };
+
+    // Fallback if AI mastery is 0 but we have solved problems
+    if (avgMastery === 0 && (totalSolved > 0)) {
+      avgMastery = Math.min(95, Math.max(5, Math.round((totalSolved / 500) * 100))); 
+    }
+    
+    const totalQuestions = relevantRecs.reduce((sum, r) => sum + (r.topic?.questionCount || 0), 0);
+    
+    return { modules, completion: avgMastery, totalSolved, totalQuestions };
   };
 
   useEffect(() => {
@@ -140,9 +180,9 @@ export default function Practice() {
                   <MutedText className="mt-2 text-xs leading-relaxed">
                     Advanced path including foundational concepts, interview patterns, and practical applications.
                   </MutedText>
-                  <div className="mt-6 flex items-center justify-between">
+                   <div className="mt-6 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{sStats.modules} Modules</span>
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{sStats.totalSolved} Problems</span>
                       <div className="h-1 w-1 rounded-full bg-border" />
                       <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">{sStats.completion}% Proficiency</span>
                     </div>
@@ -217,7 +257,7 @@ export default function Practice() {
                           {Math.round(rec.masteryScore * 100)}% Proficiency
                         </span>
                         <div className="h-1 w-1 rounded-full bg-border" />
-                        <span className="text-[10px] font-bold text-muted-foreground uppercase">{rec.topic?.questionCount || 0} Problems</span>
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase">{rec.successfulAttempts || (Math.round((rec.attemptCount || 0) / 2)) || 0} Problems</span>
                       </div>
                     </div>
                   </div>
@@ -263,7 +303,7 @@ export default function Practice() {
               { label: 'Mastery Level', value: `${Math.round((selectedProgression.masteryScore || 0) * 100)}%`, icon: Target, variant: 'emerald' },
               { label: 'Readiness Rank', value: selectedProgression.progressionReadinessScore >= 0.7 ? 'Tier 1' : selectedProgression.progressionReadinessScore >= 0.4 ? 'Tier 2' : 'Tier 3', icon: Zap, variant: 'indigo' },
               { label: 'Complexity', value: selectedProgression.currentDifficultyLevel || 'Standard', icon: Code2, variant: 'amber' },
-              { label: 'Iterations', value: String(selectedProgression.attemptCount || 0), icon: Info, variant: 'cyan' },
+              { label: 'Solved Problems', value: String(selectedProgression.stats?.successfulAttempts || 0), icon: Info, variant: 'cyan' },
             ].map((s) => (
               <motion.div key={s.label} variants={item} className="relative overflow-hidden p-6 rounded-2xl border border-border bg-card shadow-soft group hover:shadow-premium transition-all">
                 <div className={cn("absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity", 

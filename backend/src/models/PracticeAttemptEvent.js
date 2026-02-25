@@ -63,6 +63,16 @@ const practiceAttemptEventSchema = new mongoose.Schema(
       description: 'Total time spent (ms) on this problem',
     },
 
+    initialSolveTime: {
+      type: Number,
+      description: 'Solve time of the very first success (ms)',
+    },
+
+    recallImprovement: {
+      type: Number,
+      description: 'Percentage improvement in solve time compared to initial solve',
+    },
+
     // Number of attempts to solve
     attempts: {
       type: Number,
@@ -251,6 +261,12 @@ const practiceAttemptEventSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
       description: 'True if attempt was part of a revision session',
+    },
+
+    isValidation: {
+      type: Boolean,
+      default: false,
+      description: 'True if this is a validation task (fresh problem) vs reinforcement (old problem)',
     },
   },
   {

@@ -147,6 +147,14 @@ const practiceSessionSchema = new mongoose.Schema(
       type: Boolean,
       default: true, // true = old stdin format, false = new wrapped format
     },
+    isRevision: {
+      type: Boolean,
+      default: false,
+    },
+    isValidation: {
+      type: Boolean,
+      default: false,
+    },
 
     // Submission Result (populated after judging)
     submissionResult: {

@@ -579,7 +579,7 @@ export const generatePersonalizedQuestions = async (req, res) => {
  */
 export const startSession = async (req, res) => {
   try {
-    const { problemId, topicId, language } = req.body;
+    const { problemId, topicId, language, isRevision = false, isValidation = false } = req.body;
     
     // Extract userId - support both authenticated users and demo mode
     let userId;
@@ -684,6 +684,8 @@ export const startSession = async (req, res) => {
       topicId,
       codeLanguage: language,
       status: 'active',
+      isRevision,
+      isValidation,
       createdAt: new Date(),
       lastActivityAt: new Date(),
     });
@@ -971,6 +973,23 @@ export const submitPractice = async (req, res) => {
         // Create PracticeAttemptEvent
         const { default: PracticeAttemptEvent } = await import('../models/PracticeAttemptEvent.js');
 
+        // Check for first success to calculate recall improvement
+        let initialSolveTime = null;
+        if (isAccepted) {
+          const firstSuccess = await PracticeAttemptEvent.findOne({
+            userId,
+            problemId: session.problemId,
+            correctness: true
+          }).sort({ createdAt: 1 }).lean();
+          
+          if (firstSuccess) {
+            initialSolveTime = firstSuccess.solveTime;
+          }
+        }
+
+        const solveTime = Date.now() - (session.createdAt?.getTime() || 0);
+        const recallImprovement = initialSolveTime ? (initialSolveTime - solveTime) / initialSolveTime : 0;
+
         const event = new PracticeAttemptEvent({
           userId,
           problemId: session.problemId,
@@ -979,11 +998,15 @@ export const submitPractice = async (req, res) => {
           sourceSubmissionId: sessionId,
           attempts: session.submissionAttempt,
           correctness: isAccepted,
-          solveTime: Date.now() - (session.createdAt?.getTime() || 0),
+          solveTime,
+          initialSolveTime: initialSolveTime || (isAccepted ? solveTime : null),
+          recallImprovement: isAccepted ? recallImprovement : 0,
           explanation,
           voiceTranscript,
-          isFirstSuccess: isAccepted,
+          isFirstSuccess: isAccepted && !initialSolveTime,
           isRetry: session.submissionAttempt > 1,
+          isRevision: session.isRevision || false,
+          isValidation: session.isValidation || false,
         });
 
         await event.save();
@@ -1017,6 +1040,32 @@ export const submitPractice = async (req, res) => {
               .catch((err) => {
                 logger.warn('Failed to trigger mastery update:', err.message);
                 return 'mastery_update_failed';
+              })
+          );
+
+          // Trigger retention update (Phase 5: Neural Sync)
+          mlTriggers.push(
+            axios
+              .post(
+                `${mlServiceUrl}/ai/ml/retention/update`,
+                {
+                  user_id: userId.toString(),
+                  topic_id: session.topicId,
+                  is_successful_revision: isAccepted,
+                  time_since_last_revision_hours: 24, // Fallback if no prior data
+                  hints_used: (session.hints || []).length,
+                  recall_speed_ms: solveTime,
+                  initial_solve_time_ms: initialSolveTime || (isAccepted ? solveTime : null),
+                },
+                { timeout: 5000 }
+              )
+              .then(() => {
+                logger.info('✅ ML retention update triggered');
+                return 'retention_update';
+              })
+              .catch((err) => {
+                logger.warn('Failed to trigger retention update:', err.message);
+                return 'retention_update_failed';
               })
           );
 

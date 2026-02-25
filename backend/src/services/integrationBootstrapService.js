@@ -209,6 +209,7 @@ async function bootstrap(userId, platform, username) {
               $set: {
                 totalAttempts: solvedCount * 2,
                 successfulAttempts: solvedCount,
+                averageAccuracy: 0.5, // 50% accuracy assumption for historical data
                 masteryScore: mastery,
                 currentDifficultyLevel: level,
                 progressionReadinessScore: rd,

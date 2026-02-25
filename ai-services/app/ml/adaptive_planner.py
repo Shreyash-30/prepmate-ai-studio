@@ -30,6 +30,8 @@ class TaskRecommendation(BaseModel):
     difficulty: str  # "easy", "medium", "hard"
     rationale: str
     expected_learning_gain: float  # 0-1
+    is_validation: bool = False  # True if fresh problem
+    phase: Optional[str] = None  # "reinforcement" or "validation"
 
 
 class AdaptivePlan(BaseModel):
@@ -242,18 +244,50 @@ class AdaptivePlanner:
                     
                     rationale = self._generate_rationale(candidate, weakness_analysis)
                     
-                    tasks_today.append(
-                        TaskRecommendation(
-                            task_id=f"{request.user_id}_{candidate['topic_id']}_task",
-                            topic_id=candidate["topic_id"],
-                            task_type=candidate["task_type"],
-                            priority=candidate["priority"],
-                            estimated_time_minutes=candidate["time_minutes"],
-                            difficulty=candidate["difficulty"],
-                            rationale=rationale,
-                            expected_learning_gain=candidate["learning_gain"],
+                    if candidate["task_type"] == "revision":
+                        # Dual-Phase Revision: Add Reinforcement task
+                        tasks_today.append(
+                            TaskRecommendation(
+                                task_id=f"{request.user_id}_{candidate['topic_id']}_reinforcement",
+                                topic_id=candidate["topic_id"],
+                                task_type="revision",
+                                priority=candidate["priority"],
+                                estimated_time_minutes=candidate["time_minutes"] // 2,
+                                difficulty=candidate["difficulty"],
+                                rationale=f"Reinforcement Phase: Re-activate memory for {candidate['topic_id']}",
+                                expected_learning_gain=candidate["learning_gain"] * 0.5,
+                                is_validation=False,
+                                phase="reinforcement"
+                            )
                         )
-                    )
+                        # Add Validation task (Conceptual Transfer)
+                        tasks_today.append(
+                            TaskRecommendation(
+                                task_id=f"{request.user_id}_{candidate['topic_id']}_validation",
+                                topic_id=candidate["topic_id"],
+                                task_type="revision",
+                                priority=candidate["priority"] * 0.9,
+                                estimated_time_minutes=candidate["time_minutes"] // 2,
+                                difficulty=candidate["difficulty"],
+                                rationale=f"Validation Phase: Verify conceptual transfer for {candidate['topic_id']} with fresh problem",
+                                expected_learning_gain=candidate["learning_gain"],
+                                is_validation=True,
+                                phase="validation"
+                            )
+                        )
+                    else:
+                        tasks_today.append(
+                            TaskRecommendation(
+                                task_id=f"{request.user_id}_{candidate['topic_id']}_task",
+                                topic_id=candidate["topic_id"],
+                                task_type=candidate["task_type"],
+                                priority=candidate["priority"],
+                                estimated_time_minutes=candidate["time_minutes"],
+                                difficulty=candidate["difficulty"],
+                                rationale=rationale,
+                                expected_learning_gain=candidate["learning_gain"],
+                            )
+                        )
             
             # Generate weekly structure
             weekly_structure = self._generate_weekly_structure(

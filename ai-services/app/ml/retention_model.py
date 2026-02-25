@@ -18,6 +18,9 @@ class RetentionUpdateRequest(BaseModel):
     topic_id: str
     is_successful_revision: bool
     time_since_last_revision_hours: float
+    hints_used: int = 0
+    recall_speed_ms: Optional[float] = None
+    initial_solve_time_ms: Optional[float] = None
 
 
 class RetentionMetrics(BaseModel):
@@ -66,6 +69,8 @@ class EbbinghausForgettingCurve:
         current_stability: float,
         successful_revision: bool,
         retention_at_review: float,
+        hints_used: int = 0,
+        recall_improvement: float = 0.0,
     ) -> float:
         """
         Update stability after a revision/review
@@ -81,17 +86,27 @@ class EbbinghausForgettingCurve:
             Updated stability value
         """
         if successful_revision:
-            # Increase stability
             # Factor = 1.3 for successful recall
             factor = 1.3 * (2.0 - (1.0 - retention_at_review))
+            
+            # 📊 Neural Sync: Recall Speed Bonus
+            # If user solved it faster than before, they get a small stability boost
+            if recall_improvement > 0.2: # 20% faster
+                factor *= 1.1
+                
+            # 🚫 Zero-Hint Policy
+            # Revision = Memory Retrieval. Hints during revision are heavily penalized.
+            if hints_used > 0:
+                logger.info(f"🚫 Zero-Hint Policy: Penalizing stability due to {hints_used} hints")
+                factor *= max(0.2, 1.0 - (hints_used * 0.4))
+                
             new_stability = current_stability * factor
         else:
             # Decrease stability on failure
-            # Reset to a higher initial value
             new_stability = current_stability * 0.5
         
-        # Bound stability
-        new_stability = max(1.0, min(30.0, new_stability))
+        # Bound stability (Phase 5: Up to 60 days for 'Deep Mastery')
+        new_stability = max(1.0, min(60.0, new_stability))
         return new_stability
     
     @staticmethod
@@ -181,11 +196,19 @@ class RetentionModel:
                 current_stability,
             )
             
-            # Update stability based on revision result
+            # Calculate recall improvement
+            recall_improvement = 0.0
+            if request.recall_speed_ms and request.initial_solve_time_ms:
+                recall_improvement = (request.initial_solve_time_ms - request.recall_speed_ms) / max(request.initial_solve_time_ms, 1)
+                recall_improvement = max(-1.0, min(1.0, recall_improvement))
+
+            # Update stability based on revision result + Zero-Hint Policy + Recall Speed
             new_stability = self.forgetting_curve.update_stability(
                 current_stability,
                 request.is_successful_revision,
                 retention_now,
+                hints_used=request.hints_used,
+                recall_improvement=recall_improvement
             )
             
             # Compute next revision date

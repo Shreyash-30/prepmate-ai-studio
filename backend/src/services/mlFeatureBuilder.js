@@ -61,6 +61,9 @@ class MLFeatureBuilder {
       topic_id: submission.primaryTopicId || 'misc',
       is_successful_revision: isSuccessfulRevision,
       time_since_last_revision_hours: timeSinceLastRevisionHours,
+      hints_used: submission.hintsUsed || 0,
+      recall_speed_ms: submission.solveTime || submission.runtime_ms,
+      initial_solve_time_ms: submission.initialSolveTime || null,
     };
   }
 

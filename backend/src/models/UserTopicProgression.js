@@ -286,7 +286,7 @@ userTopicProgressionSchema.statics.findOrCreateForUser = async function (userId,
 
 userTopicProgressionSchema.statics.getUserProgressionByTopic = function (userId) {
   return this.find({ userId })
-    .select('topicId currentDifficultyLevel progressionReadinessScore recommendedNextDifficulty')
+    .select('topicId currentDifficultyLevel progressionReadinessScore recommendedNextDifficulty masteryScore totalAttempts successfulAttempts averageAccuracy')
     .sort({ lastAttemptAt: -1 });
 };
 
