@@ -303,7 +303,7 @@ export default function Practice() {
               { label: 'Mastery Level', value: `${Math.round((selectedProgression.masteryScore || 0) * 100)}%`, icon: Target, variant: 'emerald' },
               { label: 'Readiness Rank', value: selectedProgression.progressionReadinessScore >= 0.7 ? 'Tier 1' : selectedProgression.progressionReadinessScore >= 0.4 ? 'Tier 2' : 'Tier 3', icon: Zap, variant: 'indigo' },
               { label: 'Complexity', value: selectedProgression.currentDifficultyLevel || 'Standard', icon: Code2, variant: 'amber' },
-              { label: 'Solved Problems', value: String(selectedProgression.stats?.successfulAttempts || 0), icon: Info, variant: 'cyan' },
+              { label: 'Solved Problems', value: String(selectedProgression.successfulAttempts || selectedProgression.stats?.successfulAttempts || (Math.round((selectedProgression.attemptCount || 0) / 2)) || 0), icon: Info, variant: 'cyan' },
             ].map((s) => (
               <motion.div key={s.label} variants={item} className="relative overflow-hidden p-6 rounded-2xl border border-border bg-card shadow-soft group hover:shadow-premium transition-all">
                 <div className={cn("absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity", 

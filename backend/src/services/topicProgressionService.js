@@ -358,8 +358,13 @@ class TopicProgressionService {
         progressionReadinessScore: progression.progressionReadinessScore,
         readinessScore: progression.progressionReadinessScore,
         attemptCount: stats.totalAttempts || progression.totalAttempts || 0,
+        successfulAttempts: stats.successfulAttempts || progression.successfulAttempts || 0,
         isMastered: progression.isMastered,
-        stats: stats,
+        stats: {
+          ...stats,
+          successfulAttempts: stats.successfulAttempts || progression.successfulAttempts || 0,
+          totalAttempts: stats.totalAttempts || progression.totalAttempts || 0,
+        },
         progression: progression.difficultyProgression,
         recentPerformance: attempts.map((a) => ({
           problemId: a.problemId,
